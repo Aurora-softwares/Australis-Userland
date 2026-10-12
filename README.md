@@ -82,14 +82,14 @@ Userland should implement policy:
 
 ### Kernel and AUEX
 
-- Define a versioned process-start record containing `argc`, `argv`,
+- [x] Define a versioned process-start record containing `argc`, `argv`,
   environment entries, working directory, and standard descriptors.
-- Copy all start data through checked user memory and reject malformed counts,
+- [x] Copy all start data through checked user memory and reject malformed counts,
   lengths, pointers, and duplicate ownership.
-- Add syscall results with explicit success, end-of-file, retry, invalid
+- [x] Add syscall results with explicit success, end-of-file, retry, invalid
   argument, not found, permission, and I/O error states.
-- Add dynamic-path open calls and read-only system-information queries.
-- Add process identifiers plus foreground `spawn`, `wait`, and exit status.
+- [x] Add dynamic-path open calls and read-only system-information queries.
+- [x] Add process identifiers plus foreground `spawn`, `wait`, and exit status.
 
 ### Compiler
 
@@ -99,16 +99,27 @@ Userland should implement policy:
 - [x] Add scalar locals, integer and Boolean operations, comparisons,
   branches, loops, `break`, `continue`, and computed console output and exits
   to the AUEX backend.
-- [ ] Add application method calls to the AUEX backend.
-- Add bounded strings and byte arrays backed by the user data region.
-- Preserve the existing AUEX validation, CRC, instruction limit, and cleanup
+- [x] Add application method calls to the AUEX backend.
+- [x] Add bounded strings and byte arrays backed by the user data region.
+- [x] Preserve the existing AUEX validation, CRC, instruction limit, and cleanup
   behavior.
 
 ### Exit test
 
 An argument-printing `.exec` receives multiple edited arguments, returns a
 nonzero status, and leaves descriptor and page counts unchanged after repeated
-AHCI and NVMe QEMU runs.
+AHCI and NVMe QEMU runs. Run `make test-userland-stage1` to rebuild the hosted
+runtime, compile the fixture, and check both boot paths.
+
+The `AUSP` version 1 start record is copied to read-only user memory at
+`0x600000`. Its header stores the record length, argument and environment
+counts, working-directory pointer and length, and standard descriptors. Up to
+16 arguments and 16 environment entries use checked pointer/length tables;
+each string is NUL terminated. The default directory is `/`, and the standard
+descriptors are 0, 1, and 2. The caller's buffers are copied before execution.
+The stage 1 starter project in this directory prints its arguments and exits
+successfully; build it with
+`build/hydrogen-apps build src/userland/australlis.userland.hyproj -o build/userland.exec`.
 
 ## Stage 2: external command shell
 
@@ -218,17 +229,9 @@ instructions, and cannot impersonate a service. A process fault terminates only
 that process and returns its resources while PID 1 and both recovery terminals
 remain operational.
 
-## First implementation slice
+## Stage 2 handoff
 
-The recovery shell now passes up to 16 edited tokens to AUEX through checked
-VM string handles. `Main(string[] args)` can count, index, compare, measure,
-and print them; AHCI and NVMe boot tests cover paths, option tokens, quoting,
-and escaped spaces. The remaining steps toward a general userland process ABI
-are:
-
-1. define versioned process-start and syscall-result records;
-2. copy arguments into checked user memory alongside environment and working
-   directory data;
-3. add dynamic read-only file open by argument;
-4. compile `cat.exec` as the first external command;
-5. retain the built-in `cat` as recovery fallback until its QEMU matrix passes.
+Stage 1 provides checked process inputs, local method calls, byte arrays,
+dynamic read-only file access, and foreground process results. Stage 2 will
+move recovery-shell commands into separate executables and use the existing
+HyFS 2 hierarchy and executable search path to launch them.
