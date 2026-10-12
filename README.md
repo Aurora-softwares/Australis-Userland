@@ -26,6 +26,58 @@ Userland should implement policy:
 - application manifests and capability requests;
 - display composition, windows, desktop behavior, and notifications.
 
+## CLI Commands to require
+
+### Essentials
+
+| Command | Description |
+| --- | --- |
+| `help` | Display available commands |
+| `cd` | Change directory |
+| `ls` | List files and directories |
+| `pwd` | Print working directory |
+| `cat` | Display file contents |
+| `echo` | Print text |
+| `clear` | Clear terminal |
+| `exit` | Exit the shell |
+| `history` | Display previous commands |
+| `tree` | Display directory structure |
+| `mkdir` | Create directories |
+| `touch` | Create empty files |
+| `cp` | Copy files |
+| `mv` | Move or rename files |
+| `rm` | Remove files |
+
+### File utilities
+
+| Command | Purpose |
+| --- | --- |
+| **`edit`** | Terminal text editor |
+| **`view`** | Read-only text viewer |
+| **`hexedit`** | Hexadecimal file editor |
+| **`hexview`** | Hexadecimal file viewer |
+| **`finfo`** | Detailed file information |
+
+### System administration
+
+| Command | Purpose |
+| --- | --- |
+| `sysinfo` | Display system information |
+| `uptime` | Display system uptime |
+| `mem` | Display memory usage |
+| `ps` | List processes |
+| `kill` | Terminate processes |
+| `top` | Interactive process monitor |
+| `devices` | Display detected devices |
+| `drivers` | Display installed drivers |
+| `services` | Manage system services |
+| `mount` | Mount filesystems |
+| `umount` | Unmount filesystems |
+| `df` | Display filesystem capacity |
+| `dmesg` | Display kernel messages |
+| `reboot` | Restart Australis |
+| `shutdown` | Shut down Australis |
+
 ## Stage 1: process inputs and application runtime
 
 ### Kernel and AUEX
