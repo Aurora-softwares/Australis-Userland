@@ -127,8 +127,9 @@ successfully; build it with
   projects.
 - Add user-facing directory enumeration and metadata, then move `ls` out of
   the kernel shell.
-- Implement shell variables and `PATH` lookup. Start with
-  `PATH=/Bin:/System/Bin` once filesystem directories exist.
+- Implement shell variables and `PATH` lookup in the userland shell. Start
+  with `PATH=/Bin:/System`; the current kernel recovery shell uses
+  `PATH=/System:/Bin:/`. Add `/System/Bin` only if it is packaged later.
 - Keep `cd`, `set`, `export`, `unset`, and `exit` as shell built-ins.
 - Retain explicit `run /path/program.exec` during the transition.
 - Return command-not-found, invalid executable, signal/fault, and exit-status
@@ -143,6 +144,10 @@ mapping, queue, or partial-output leak.
 
 ## Stage 3: directory-capable system image
 
+HyFS 2 already supplies nested directories, metadata, and transactional
+writes on the separate `/data` volume. This stage completes the packaged
+system image and recovery checks; the boot root stays read-only.
+
 - Define a directory-capable HyFS revision with stable identifiers, checked
   metadata, file lengths, directory entries, and CRC coverage.
 - Add atomic creation and replacement primitives before enabling general
@@ -150,7 +155,7 @@ mapping, queue, or partial-output leak.
 - Create `/System`, `/Bin`, `/Applications`, `/Users`, `/Volumes`, and
   `/Temporary`.
 - Package system components and applications into the paths documented in
-  `src/system/README.md`.
+  `src/README.md` and `src/userland/system/README.md`.
 - Preserve read-only mounting and recovery when a volume is damaged or removed.
 
 ### Exit test
