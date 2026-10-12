@@ -41,7 +41,9 @@ Userland should implement policy:
 
 ### Compiler
 
-- Populate `Main(string[] args)` for `type = "exec"` projects.
+- [x] Populate `Main(string[] args)` for `type = "exec"` projects in the
+  recovery shell, with bounded argument count, indexing, comparison, length,
+  and output.
 - [x] Add scalar locals, integer and Boolean operations, comparisons,
   branches, loops, `break`, `continue`, and computed console output and exits
   to the AUEX backend.
@@ -166,14 +168,15 @@ remain operational.
 
 ## First implementation slice
 
-The next code change should stay smaller than the complete plan:
+The recovery shell now passes up to 16 edited tokens to AUEX through checked
+VM string handles. `Main(string[] args)` can count, index, compare, measure,
+and print them; AHCI and NVMe boot tests cover paths, option tokens, quoting,
+and escaped spaces. The remaining steps toward a general userland process ABI
+are:
 
-1. define the process-start and syscall-result records;
-2. pass literal shell arguments into an AUEX process;
-3. expose one argument at a time through checked user memory;
-4. add dynamic read-only file open by argument;
-5. compile `cat.exec` as the first external command;
-6. retain the built-in `cat` as recovery fallback until the QEMU matrix passes.
-
-That slice establishes the ABI needed by later services without committing the
-kernel to the GUI, package, or native-process design prematurely.
+1. define versioned process-start and syscall-result records;
+2. copy arguments into checked user memory alongside environment and working
+   directory data;
+3. add dynamic read-only file open by argument;
+4. compile `cat.exec` as the first external command;
+5. retain the built-in `cat` as recovery fallback until its QEMU matrix passes.
