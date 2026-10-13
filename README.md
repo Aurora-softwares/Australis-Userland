@@ -123,7 +123,15 @@ successfully; build it with
 
 ## Stage 2: external command shell
 
-- Move `cat`, `version`, `echo`, and `pwd` into independent `type = "exec"`
+The first external command, `cat.exec`, is source-built from
+`commands/Cat/Cat.hyproj` and installed at `/Bin/cat.exec` in the normal HyFS 2
+image. From the current KMon shell, use `run cat /hello.txt` to resolve it
+through `PATH`. Bare `cat` still invokes the kernel recovery built-in until the
+userland command shell is ready. `make test-userland-cat` checks multi-chunk
+output, empty-file EOF, a missing-path error, and resource cleanup on AHCI and
+NVMe.
+
+- Move `version`, `echo`, and `pwd` into independent `type = "exec"`
   projects.
 - Add user-facing directory enumeration and metadata, then move `ls` out of
   the kernel shell.
