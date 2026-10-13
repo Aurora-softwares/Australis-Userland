@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Mem"
+version = "0.1.0"
+type = "exec"
+output = "mem.exec"
+sources = ["Program.hy"]
+project_references = []
+
+[package]
+id = "os.australis.mem"
+description = "Show available pages and kernel heap usage"
+authors = ["Aurora Softwares"]
+license = "MIT"

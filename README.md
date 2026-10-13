@@ -125,9 +125,8 @@ successfully; build it with
 
 The first external command, `cat.exec`, is source-built from
 `commands/Cat/Cat.hyproj` and installed at `/Bin/cat.exec` in the normal HyFS 2
-image. From the current KMon shell, use `run cat /hello.txt` to resolve it
-through `PATH`. Bare `cat` still invokes the kernel recovery built-in until the
-userland command shell is ready. `make test-userland-cat` checks multi-chunk
+image. The current KMon shell resolves bare `cat /hello.txt` through `PATH`.
+`make test-userland-cat` checks multi-chunk
 output, empty-file EOF, a missing-path error, and resource cleanup on AHCI and
 NVMe.
 
@@ -139,15 +138,18 @@ They do not expose raw kernel addresses or writable diagnostic operations.
 
 `ls.exec` lists a directory or a named file with the checked file API.
 `ps.exec` reports the currently running foreground program and the result of
-the previous launch through system-information API version 3. KMon retains
-its `mounts` command for early recovery and its `ps` command for the last
-launch summary. The current scheduler runs one foreground program at a time;
+the previous launch through system-information API version 3. Bare `ls` and
+`ps` now resolve these programs through `PATH`; KMon retains `mounts` for
+early recovery. The current scheduler runs one foreground program at a time;
 the process output does not claim concurrent programs exist.
+
+`drivers.exec` uses system-information API version 4 to report active serial,
+storage, USB, and timer drivers. `mem.exec` reports available pages and kernel
+heap usage. KMon provides `devices`, `memmap`, and `pages` without a userland
+process; detailed physical ranges from `memmap` require `D` Debug boot.
 
 - Move `version`, `echo`, and `pwd` into independent `type = "exec"`
   projects.
-- Route bare `ls` through userland command lookup and remove the transitional
-  kernel shell handler.
 - Implement shell variables and `PATH` lookup in the userland shell. Start
   with `PATH=/Bin:/System`; the current kernel recovery shell uses
   `PATH=/System:/Bin:/`. Add `/System/Bin` only if it is packaged later.

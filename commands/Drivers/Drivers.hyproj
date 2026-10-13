@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Drivers"
+version = "0.1.0"
+type = "exec"
+output = "drivers.exec"
+sources = ["Program.hy"]
+project_references = []
+
+[package]
+id = "os.australis.drivers"
+description = "Show active kernel drivers through checked system information"
+authors = ["Aurora Softwares"]
+license = "MIT"
