@@ -30,53 +30,53 @@ Userland should implement policy:
 
 ### Essentials
 
-| Command | Description |
-| --- | --- |
-| `help` | Display available commands |
-| `cd` | Change directory |
-| `ls` | List files and directories |
-| `pwd` | Print working directory |
-| `cat` | Display file contents |
-| `echo` | Print text |
-| `clear` | Clear terminal |
-| `exit` | Exit the shell |
-| `history` | Display previous commands |
-| `tree` | Display directory structure |
-| `mkdir` | Create directories |
-| `touch` | Create empty files |
-| `cp` | Copy files |
-| `mv` | Move or rename files |
-| `rm` | Remove files |
+| | Command | Description |
+| --- | --- | --- | --- |
+| | `help` | Display available commands |
+| | `cd` | Change directory |
+| | `ls` | List files and directories |
+| | `pwd` | Print working directory |
+| | `cat` | Display file contents |
+| | `echo` | Print text |
+| | `clear` | Clear terminal |
+| | `exit` | Exit the shell |
+| | `history` | Display previous commands |
+| | `tree` | Display directory structure |
+| | `mkdir` | Create directories |
+| | `touch` | Create empty files |
+| | `cp` | Copy files |
+| | `mv` | Move or rename files |
+| | `rm` | Remove files |
 
 ### File utilities
 
-| Command | Purpose |
-| --- | --- |
-| **`edit`** | Terminal text editor |
-| **`view`** | Read-only text viewer |
-| **`hexedit`** | Hexadecimal file editor |
-| **`hexview`** | Hexadecimal file viewer |
-| **`finfo`** | Detailed file information |
+| | Command | Purpose |
+| --- | --- | --- |
+| | **`edit`** | Terminal text editor |
+| | **`view`** | Read-only text viewer |
+| | **`hexedit`** | Hexadecimal file editor |
+| | **`hexview`** | Hexadecimal file viewer |
+| | **`finfo`** | Detailed file information |
 
 ### System administration
 
-| Command | Purpose |
-| --- | --- |
-| `sys-info` | Display system information |
-| `uptime` | Display system uptime |
-| `mem-info` | Display memory usage and allocator health |
-| `ps` | List processes |
-| `kill` | Terminate processes |
-| `top` | Interactive process monitor |
-| `devices` | Display detected devices |
-| `drivers` | Display installed drivers |
-| `services` | Manage system services |
-| `mount` | Mount filesystems |
-| `umount` | Unmount filesystems |
-| `df` | Display filesystem capacity |
-| `dmesg` | Display kernel messages |
-| `reboot` | Restart Australis |
-| `shutdown` | Shut down Australis |
+| | Command |  | Purpose |
+| --- | --- | --- |
+| | `sys-info` | Display system information |
+| | `uptime` | Display system uptime |
+| | `mem-info` | Display memory usage and allocator health |
+| | `ps` | List processes |
+| | `kill` | Terminate processes |
+| | `top` | Interactive process monitor |
+| | `devices` | Display detected devices |
+| | `drivers` | Display installed drivers |
+| | `services` | Manage system services |
+| | `mount` | Mount filesystems |
+| | `umount` | Unmount filesystems |
+| | `df` | Display filesystem capacity |
+| | `dmesg` | Display kernel messages |
+| | `reboot` | Restart Australis |
+| | `shutdown` | Shut down Australis |
 
 ## Stage 1: process inputs and application runtime
 
@@ -117,11 +117,17 @@ counts, working-directory pointer and length, and standard descriptors. Up to
 16 arguments and 16 environment entries use checked pointer/length tables;
 each string is NUL terminated. The default directory is `/`, and the standard
 descriptors are 0, 1, and 2. The caller's buffers are copied before execution.
-The stage 1 starter project in this directory prints its arguments and exits
-successfully; build it with
-`build/hydrogen-apps build src/userland/australlis.userland.hyproj -o build/userland.exec`.
+The stage 1 argument fixture lives in `tests/user`.
+`System.exec` in this directory is the minimal PID 1 entry point. It starts
+`CommandShell.exec` as a checked foreground child. Service supervision and a
+full process table remain later work.
 
 ## Stage 2: external command shell
+
+An early `CommandShell.exec` preview is built from `src/shell` and packaged at
+`/System/Core/CommandShell.exec`. Normal boot starts it through `System.exec`.
+It can read input, show `help`, and exit; command parsing and child launch
+remain required before the Stage 2 exit test can pass.
 
 The first external command, `cat.exec`, is source-built from
 `commands/Cat/Cat.hyproj` and installed at `/Bin/cat.exec` in the normal HyFS 2
@@ -189,8 +195,8 @@ recovery shell when the userland image is missing or invalid.
 
 ## Stage 4: system manager and services
 
-- Install `/System/Core/System.exec` as the first user process.
-- Start it as PID 1 after the kernel mounts the root filesystem.
+- ✅ Install `/System/Core/System.exec` as the first user process.
+- ✅ Start it as PID 1 after the kernel mounts the root filesystem.
 - Add a process table with parent, child, running, blocked, exited, and faulted
   states.
 - Support multiple runnable processes, blocking waits, timers, and preemption.

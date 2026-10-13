@@ -23,15 +23,18 @@ and session contracts are in place.
 
 ## Current status and next gates
 
-The image builder creates `/System/Core`, but it does not yet install
-`System.exec`. There is no PID 1 process table, service supervisor, or
-session manager. The kernel recovery shell remains the boot console.
+The image builder installs `System.exec` and `CommandShell.exec` under
+`/System/Core`. Normal boot starts `System.exec` as PID 1, and its first
+checked foreground child is the command shell. An explicit rescue or debug
+boot enters KMon; a missing or failed system image falls back to KMon.
+The shell is still an input/help/exit preview. There is no process table,
+service supervisor, or session manager yet.
 
-1. Userland Stage 2 moves ordinary commands into independent `.exec`
-   programs and establishes `CommandShell.exec`.
+1. Userland Stage 2 gives `CommandShell.exec` parsing, `PATH` lookup, and
+   child launch so ordinary commands run from the normal shell.
 2. Stage 3 packages the system tree and verifies missing, invalid, and
    corrupt system images still enter KMon.
-3. Stage 4 adds multiple runnable processes, blocking waits, PID 1,
+3. Stage 4 adds multiple runnable processes, blocking waits,
    bounded service restart, and a text session.
 4. Stages 5 and 6 add versioned IPC/capabilities, sessions, and optional
    graphical services.
