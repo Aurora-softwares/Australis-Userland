@@ -82,26 +82,26 @@ Userland should implement policy:
 
 ### Kernel and AUEX
 
-- [x] Define a versioned process-start record containing `argc`, `argv`,
+- ✅ Define a versioned process-start record containing `argc`, `argv`,
   environment entries, working directory, and standard descriptors.
-- [x] Copy all start data through checked user memory and reject malformed counts,
+- ✅ Copy all start data through checked user memory and reject malformed counts,
   lengths, pointers, and duplicate ownership.
-- [x] Add syscall results with explicit success, end-of-file, retry, invalid
+- ✅ Add syscall results with explicit success, end-of-file, retry, invalid
   argument, not found, permission, and I/O error states.
-- [x] Add dynamic-path open calls and read-only system-information queries.
-- [x] Add process identifiers plus foreground `spawn`, `wait`, and exit status.
+- ✅ Add dynamic-path open calls and read-only system-information queries.
+- ✅ Add process identifiers plus foreground `spawn`, `wait`, and exit status.
 
 ### Compiler
 
-- [x] Populate `Main(string[] args)` for `type = "exec"` projects in the
+- ✅ Populate `Main(string[] args)` for `type = "exec"` projects in the
   recovery shell, with bounded argument count, indexing, comparison, length,
   and output.
-- [x] Add scalar locals, integer and Boolean operations, comparisons,
+- ✅ Add scalar locals, integer and Boolean operations, comparisons,
   branches, loops, `break`, `continue`, and computed console output and exits
   to the AUEX backend.
-- [x] Add application method calls to the AUEX backend.
-- [x] Add bounded strings and byte arrays backed by the user data region.
-- [x] Preserve the existing AUEX validation, CRC, instruction limit, and cleanup
+- ✅ Add application method calls to the AUEX backend.
+- ✅ Add bounded strings and byte arrays backed by the user data region.
+- ✅ Preserve the existing AUEX validation, CRC, instruction limit, and cleanup
   behavior.
 
 ### Exit test
