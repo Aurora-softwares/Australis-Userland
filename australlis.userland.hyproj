@@ -2,7 +2,7 @@ format = 2
 name = "australlis.userland"
 version = "0.0.1"
 type = "exec"
-output = "userland.exec"
+output = "/System/Core/System.exec"
 sources = ["./program.hy"]
 project_references = []
 
