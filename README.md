@@ -132,14 +132,22 @@ output, empty-file EOF, a missing-path error, and resource cleanup on AHCI and
 NVMe.
 
 `sys-info.exec` and `mem-info.exec` are also source-built applications in the
-OS aggregate. They use system-information API version 2 to replace the former
+OS aggregate. They use the read-only selectors introduced in
+system-information API version 2 to replace the former
 `cpu`, `cpuid`, `timer`, and `heap` command proposals with read-only summaries.
 They do not expose raw kernel addresses or writable diagnostic operations.
 
+`ls.exec` lists a directory or a named file with the checked file API.
+`ps.exec` reports the currently running foreground program and the result of
+the previous launch through system-information API version 3. KMon retains
+its `mounts` command for early recovery and its `ps` command for the last
+launch summary. The current scheduler runs one foreground program at a time;
+the process output does not claim concurrent programs exist.
+
 - Move `version`, `echo`, and `pwd` into independent `type = "exec"`
   projects.
-- Add user-facing directory enumeration and metadata, then move `ls` out of
-  the kernel shell.
+- Route bare `ls` through userland command lookup and remove the transitional
+  kernel shell handler.
 - Implement shell variables and `PATH` lookup in the userland shell. Start
   with `PATH=/Bin:/System`; the current kernel recovery shell uses
   `PATH=/System:/Bin:/`. Add `/System/Bin` only if it is packaged later.

@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Ls"
+version = "0.1.0"
+type = "exec"
+output = "ls.exec"
+sources = ["Program.hy"]
+project_references = []
+
+[package]
+id = "os.australis.ls"
+description = "List files through the checked Australis directory API"
+authors = ["Aurora Softwares"]
+license = "MIT"
