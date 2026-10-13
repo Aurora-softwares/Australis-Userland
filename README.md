@@ -62,9 +62,9 @@ Userland should implement policy:
 
 | Command | Purpose |
 | --- | --- |
-| `sysinfo` | Display system information |
+| `sys-info` | Display system information |
 | `uptime` | Display system uptime |
-| `mem` | Display memory usage |
+| `mem-info` | Display memory usage and allocator health |
 | `ps` | List processes |
 | `kill` | Terminate processes |
 | `top` | Interactive process monitor |
@@ -130,6 +130,11 @@ through `PATH`. Bare `cat` still invokes the kernel recovery built-in until the
 userland command shell is ready. `make test-userland-cat` checks multi-chunk
 output, empty-file EOF, a missing-path error, and resource cleanup on AHCI and
 NVMe.
+
+`sys-info.exec` and `mem-info.exec` are also source-built applications in the
+OS aggregate. They use system-information API version 2 to replace the former
+`cpu`, `cpuid`, `timer`, and `heap` command proposals with read-only summaries.
+They do not expose raw kernel addresses or writable diagnostic operations.
 
 - Move `version`, `echo`, and `pwd` into independent `type = "exec"`
   projects.
