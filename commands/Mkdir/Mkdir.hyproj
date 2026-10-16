@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Mkdir"
+version = "0.1.0"
+type = "exec"
+output = "mkdir.exec"
+sources = ["Program.hy"]
+project_references = []
+
+[package]
+id = "os.australis.mkdir"
+description = "Create a directory on a writable volume"
+authors = ["Aurora Softwares"]
+license = "MIT"

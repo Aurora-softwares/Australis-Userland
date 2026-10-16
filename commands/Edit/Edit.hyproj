@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Edit"
+version = "0.1.0"
+type = "exec"
+output = "edit.exec"
+sources = ["Program.hy", "../EditorStorage.hy"]
+project_references = []
+
+[package]
+id = "os.australis.edit"
+description = "Terminal text editor with cursor navigation and checked saves"
+authors = ["Aurora Softwares"]
+license = "MIT"

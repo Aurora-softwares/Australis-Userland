@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Touch"
+version = "0.1.0"
+type = "exec"
+output = "touch.exec"
+sources = ["Program.hy"]
+project_references = []
+
+[package]
+id = "os.australis.touch"
+description = "Create an empty file when it does not exist"
+authors = ["Aurora Softwares"]
+license = "MIT"

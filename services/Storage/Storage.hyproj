@@ -1,0 +1,5 @@
+format = 2
+name = "AustralisStorageService"
+type = "exec"
+output = "system/Core/Storage.exec"
+sources = ["./Program.hy"]

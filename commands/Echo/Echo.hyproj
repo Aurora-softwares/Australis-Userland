@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Echo"
+version = "0.1.0"
+type = "exec"
+output = "echo.exec"
+sources = ["Program.hy"]
+project_references = []
+
+[package]
+id = "os.australis.echo"
+description = "Print command arguments"
+authors = ["Aurora Softwares"]
+license = "MIT"

@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Hexedit"
+version = "0.1.0"
+type = "exec"
+output = "hexedit.exec"
+sources = ["Program.hy", "../EditorStorage.hy"]
+project_references = []
+
+[package]
+id = "os.australis.hexedit"
+description = "Terminal hex editor with byte navigation and checked saves"
+authors = ["Aurora Softwares"]
+license = "MIT"

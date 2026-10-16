@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Rm"
+version = "0.1.0"
+type = "exec"
+output = "rm.exec"
+sources = ["Program.hy"]
+project_references = []
+
+[package]
+id = "os.australis.rm"
+description = "Remove a file or empty directory"
+authors = ["Aurora Softwares"]
+license = "MIT"

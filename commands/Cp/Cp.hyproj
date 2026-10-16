@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Cp"
+version = "0.1.0"
+type = "exec"
+output = "cp.exec"
+sources = ["Program.hy", "../CopyCore.hy"]
+project_references = []
+
+[package]
+id = "os.australis.cp"
+description = "Copy a file through checked descriptor operations"
+authors = ["Aurora Softwares"]
+license = "MIT"

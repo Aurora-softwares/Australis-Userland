@@ -1,0 +1,4 @@
+AUSM1
+Device|/System/Core/Device.exec|2|5000|O
+Storage|/System/Core/Storage.exec|2|5000|O
+CommandShell|/System/Core/CommandShell.exec|3|5000|S

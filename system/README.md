@@ -10,6 +10,7 @@ VFS, scheduling, system calls, and the KMon recovery path. See the
 
 ```text
 BOOTX64.EFI -> KERNEL.BIN -> /System/Core/System.exec (PID 1)
+                                      -> Device.exec -> Storage.exec
                                       -> CommandShell.exec
                                       -> optional graphical session
 ```
@@ -23,21 +24,45 @@ and session contracts are in place.
 
 ## Current status and next gates
 
-The image builder installs `System.exec` and `CommandShell.exec` under
-`/System/Core`. Normal boot starts `System.exec` as PID 1, and its first
-checked foreground child is the command shell. An explicit rescue or debug
+The image builder installs `System.exec`, `Device.exec`, `Storage.exec`, and
+`CommandShell.exec` under `/System/Core`, plus the versioned
+`/System/Config/startup.manifest` and
+`/System/Config/capabilities.manifest`. PID 1 starts the two one-shot readiness
+checks in manifest order, then the command shell. An explicit rescue or debug
 boot enters KMon; a missing or failed system image falls back to KMon.
-The shell is still an input/help/exit preview. There is no process table,
-service supervisor, or session manager yet.
+The shell parses commands and arguments, maintains a working directory and
+exported environment, and launches foreground `/System/Bin` executables.
+PID 1 waits for each service to report readiness, then waits for its exit.
+The manifest sets each readiness bound and retry count. The command shell has
+three attempts; a clean exit ends the session without a retry.
 
-1. Userland Stage 2 gives `CommandShell.exec` parsing, `PATH` lookup, and
-   child launch so ordinary commands run from the normal shell.
+The `AUSM1` file contains one `name|absolute path|attempts|ready rounds|mode`
+record per line. `O` runs a one-shot check and advances only after readiness
+and exit code 0; `S` starts the final interactive session. PID 1 accepts at
+most four records and requires `S` to be last. A readiness timeout terminates
+and reaps that child before the next attempt.
+Packaged system files and KMon fallback for missing or malformed PID 1 and
+corrupt HyFS metadata are covered by `make test-userland-stage3`.
+The AUEX runtime schedules live children in bounded instruction quanta and
+supports spawn, wait, readiness, termination, and timer-backed sleep. Native
+interrupt preemption, persistent service control, and a session manager remain.
+
+The `AUSC1` capability file contains `absolute path|mask` records. Bit `1`
+grants channel creation to a direct child. Missing, malformed, or unmatched
+records grant nothing. The kernel reads this file from the read-only root and
+checks the grant against the caller's process record on channel open.
+
+1. Stage 2 child context, launch errors, terminal parity, and repeated
+   read-only command cleanup pass on AHCI and NVMe. Precise release after
+   filesystem mutation remains future kernel memory work.
 2. Stage 3 packages the system tree and verifies missing, invalid, and
-   corrupt system images still enter KMon.
-3. Stage 4 adds multiple runnable processes, blocking waits,
-   bounded service restart, and a text session.
-4. Stages 5 and 6 add versioned IPC/capabilities, sessions, and optional
-   graphical services.
+   corrupt system images still enter KMon on AHCI and NVMe.
+3. Stage 4 has live AUEX child scheduling and manifest-driven startup with
+   bounded readiness and retries; persistent services and preemption remain.
+4. Stage 5 exposes versioned channel calls to AUEX programs with checked peer
+   identity, a declared channel grant, and exit cleanup. Shared buffers and
+   other capability types remain. Stage 6 adds sessions and optional graphical
+   services.
 
 The first services are Device, Storage, and Launch policy. Drivers stay in
 the kernel until a capability and IPC model can isolate them. `rescue.exec`
@@ -49,3 +74,7 @@ PID 1 starts `CommandShell.exec` on AHCI and NVMe, restarts one deliberately
 failed service only to its configured limit, records the cause, and releases
 all resources after exit. An explicit recovery boot or failed PID 1 reaches
 KMon. No service runs inside an interrupt handler.
+
+`make test-userland-stage4-supervision` checks bounded shell retries and KMon
+fallback on AHCI and NVMe. `make test-userland-stage4-concurrency` checks two
+overlapping AUEX children, readiness, and wait behavior on both transports.

@@ -1,0 +1,13 @@
+format = 2
+name = "Australis Mv"
+version = "0.1.0"
+type = "exec"
+output = "mv.exec"
+sources = ["Program.hy", "../CopyCore.hy"]
+project_references = []
+
+[package]
+id = "os.australis.mv"
+description = "Rename or move a file between writable volumes"
+authors = ["Aurora Softwares"]
+license = "MIT"
