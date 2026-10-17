@@ -30,7 +30,7 @@ Userland should implement policy:
 
 ### Essentials
 
-means implemented in the intended userland location and callable from
+`🟢` means implemented in the intended userland location and callable from
 `CommandShell.exec`: 🟢 complete, `🟡` partial, 🔴 missing. Mutating commands
 must target a writable volume such as `/data`; the boot root is read-only.
 
@@ -57,10 +57,10 @@ must target a writable volume such as `/data`; the boot root is read-only.
 | | Command | Purpose |
 | --- | --- | --- |
 | 🟢 | **`edit`** | Terminal text editor with cursor navigation, Save and Save As; opens any file as text, with a 4096-byte buffer |
-| 🔴 | **`view`** | Read-only text viewer |
+| 🔴 | **`view`** | Paged read-only text viewer; `cat` already covers simple file display |
 | 🟢 | **`hexedit`** | Terminal hex and ASCII editor with byte navigation, Save and Save As, and a 4096-byte buffer |
 | 🔴 | **`hexview`** | Hexadecimal file viewer |
-| 🔴 | **`finfo`** | Detailed file information |
+| 🟢 | **`inspector`** | Detailed filesystem metadata and recognized AUEX header fields; this covers the proposed `finfo` role |
 
 ### System administration
 
@@ -233,15 +233,18 @@ HyFS 2 already supplies nested directories, metadata, and transactional
 writes on the separate `/data` volume. This stage completes the packaged
 system image and recovery checks; the boot root stays read-only.
 
-- 🔴 Define a directory-capable HyFS revision with stable identifiers, checked
-  metadata, file lengths, directory entries, and CRC coverage.
-- 🔴 Add atomic creation and replacement primitives before enabling general
-  writes. Add flush semantics before removable-media writes.
-- 🔴 Create `/System`, `/System/Bin`, `/Applications`, `/Users`, `/Volumes`, and
+- 🟢 Create `/System`, `/System/Bin`, `/Applications`, `/Users`, `/Volumes`, and
   `/Temporary`.
-- 🔴 Package system components and applications into the paths documented in
+- 🟢 Package system components and applications into the paths documented in
   `src/README.md` and `src/userland/system/README.md`.
-- 🔴 Preserve read-only mounting and recovery when a volume is damaged or removed.
+- 🟢 Preserve read-only mounting and recovery when a volume is damaged or removed.
+
+The HyFS 2 format, stable identifiers, metadata/CRC validation, transactional
+creation/replacement, and flush behavior are kernel/storage responsibilities;
+their contract and remaining removable-media write policy are tracked in
+`../../docs/hyfs-v2.md` and `../../docs/hyfs2-plan.md`, rather than as
+unimplemented userland features. `make test-userland-stage3` covers the
+packaged tree and fallback from missing, invalid, or corrupt system images.
 
 ### Exit test
 
@@ -274,7 +277,8 @@ an interactive `kmon>` without a writable volume.
   Persistent service control and graceful shutdown remain.
 - 🔴 Introduce a persistent `Launch.service` with a capability and IPC
   contract. Device and Storage are currently one-shot policy checks.
-- 🔴 Keep a kernel recovery key or boot option that bypasses normal userland.
+- 🟢 Keep a kernel recovery key or boot option that bypasses normal userland;
+  `R` enters Rescue/KMon before PID 1 and `D` enters debug KMon.
 
 ### Exit test
 
@@ -302,7 +306,8 @@ No service executes in an interrupt handler or retains resources after exit.
 
 An unprivileged application can use terminal and file services but cannot
 control mounts, enumerate protected processes, or map the framebuffer. Closing
-either endpoint releases queued messages and shared pages.
+either endpoint releases queued messages and channel-owned resources; shared
+buffers remain a separate planned extension.
 
 ## Stage 6: sessions and graphical userland
 
@@ -315,7 +320,8 @@ either endpoint releases queued messages and shared pages.
   events, focus, and keyboard routing in userland.
 - 🔴 Build `DesktopShell.appb`, then `Terminal.appb` and `Explorer.appb` against
   the public display and launch protocols.
-- 🔴 Keep text-only startup as a supported configuration.
+- 🟢 Keep text-only startup as a supported configuration; it is the current
+  default and must remain available when graphical sessions are added.
 
 ### Exit test
 
@@ -325,17 +331,22 @@ input delivery. COM1 continues to provide an independent recovery console.
 
 ## Stage 7: native user mode and hardening
 
-- 🟢 Run bounded AUN1 children from the read-only system tree in ring 3 with
-  private user page tables, supervisor-only kernel mappings, a stack guard,
-  PID/exit syscalls, and contained page/general-protection faults. AHCI and
-  NVMe tests verify that PID 1 and KMon remain usable after faults.
-- 🟡 Port the remaining AUEX process and syscall contracts to native code while
-  retaining AUEX as a deterministic compatibility format if useful.
-- 🔴 Add users, groups, permissions, credential verification backed by protected
-  account storage, signed system packages, secure update and recovery policy,
-  resource limits, and audit records. Only then treat `Login.exec` as
-  authentication rather than a session chooser.
-- 🔴 Validate on physical machines in addition to the QEMU matrix.
+The ring-3 page tables, exception handling, native syscall entry, and hardware
+validation belong to the kernel, bootloader, and compiler checklists. The
+kernel already runs bounded AUN1 children and contains their faults on AHCI
+and NVMe. The remaining native terminal, file, IPC, and scheduling contracts
+are tracked in `../kernel/README.md` and `../../PLAN.md`.
+
+- 🔴 Port system programs and command-line tools after the native syscall and
+  compiler target contracts are available; keep the AUEX image as a checked
+  compatibility path during migration.
+- 🔴 Add user and session policy only after protected identity, credential,
+  permission, and audit mechanisms exist. Until then `Login.exec` can select
+  a session but cannot claim to authenticate users.
+
+Physical-machine validation, package trust, update/recovery policy, and
+resource-limit gates are OS-wide release work in `../../PLAN.md`, not
+userland-only implementation items.
 
 ### Exit test
 
