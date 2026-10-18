@@ -44,8 +44,9 @@ and reaps that child before the next attempt.
 Packaged system files and KMon fallback for missing or malformed PID 1 and
 corrupt HyFS metadata are covered by `make test-userland-stage3`.
 The AUEX runtime schedules live children in bounded instruction quanta and
-supports spawn, wait, readiness, termination, and timer-backed sleep. Native
-interrupt preemption, persistent service control, and a session manager remain.
+supports spawn, wait, readiness, termination, and timer-backed sleep. AUN1
+children use timer-preempted slices and can accept invited channels.
+Persistent service control and a session manager remain.
 
 The `AUSC1` capability file contains `absolute path|mask` records. Bit `1`
 grants channel creation to a direct child. Missing, malformed, or unmatched
@@ -58,11 +59,11 @@ checks the grant against the caller's process record on channel open.
 2. Stage 3 packages the system tree and verifies missing, invalid, and
    corrupt system images still enter KMon on AHCI and NVMe.
 3. Stage 4 has live AUEX child scheduling and manifest-driven startup with
-   bounded readiness and retries; persistent services and preemption remain.
-4. Stage 5 exposes versioned channel calls to AUEX programs with checked peer
-   identity, a declared channel grant, and exit cleanup. Shared buffers and
-   other capability types remain. Stage 6 adds sessions and optional graphical
-   services.
+   bounded readiness and retries; persistent service supervision remains.
+4. Stage 5 exposes versioned channel calls to AUEX programs and AUN1 children
+   with checked peer identity, a declared channel grant, and exit cleanup.
+   Shared buffers and other capability types remain. Stage 6 adds sessions
+   and optional graphical services.
 
 The first services are Device, Storage, and Launch policy. Drivers stay in
 the kernel until a capability and IPC model can isolate them. `rescue.exec`

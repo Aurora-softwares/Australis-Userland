@@ -30,8 +30,8 @@ Userland should implement policy:
 
 ### Essentials
 
-`🟢` means implemented in the intended userland location and callable from
-`CommandShell.exec`: 🟢 complete, `🟡` partial, 🔴 missing. Mutating commands
+🟢 means implemented in the intended userland location and callable from
+`CommandShell.exec`: 🟢 complete, 🟡 partial, 🔴 missing. Mutating commands
 must target a writable volume such as `/data`; the boot root is read-only.
 
 | | Command | Owner | Current state |
@@ -184,8 +184,8 @@ process; detailed physical ranges from `memmap` require `D` Debug boot.
 ### Stage 2 completion checklist
 
 This checklist is for **userland Stage 2**, not the bootloader's second stage.
-`🟢` means implemented and exercised, `🟡` means partly implemented, and
-`🔴` means still required for the Stage 2 exit test.
+🟢 means implemented and exercised, 🟡 means partly implemented, and
+🔴 means still required for the Stage 2 exit test.
 
 - 🟢 Boot `System.exec` as PID 1 and enter `CommandShell.exec` on a normal
   AHCI or NVMe boot; keep KMon reachable after shell exit or startup failure.
@@ -270,8 +270,9 @@ an interactive `kmon>` without a writable volume.
   exit still returns to KMon.
 - 🟢 Use parent/child process records for live AUEX spawn, readiness, wait,
   termination, exit cleanup, and bounded instruction-round scheduling.
-- 🟡 Timer-backed sleep and multiple runnable AUEX processes work; native
-  context switching and interrupt preemption remain.
+- 🟡 Timer-backed sleep, multiple runnable AUEX processes, and native
+  preemption work; multi-threaded native processes and multi-CPU scheduling
+  remain.
 - 🟡 Package a versioned startup manifest with ordered one-shot Device and
   Storage checks, readiness bounds, retry limits, and failure logging.
   Persistent service control and graceful shutdown remain.
