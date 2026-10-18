@@ -333,9 +333,10 @@ input delivery. COM1 continues to provide an independent recovery console.
 
 The ring-3 page tables, exception handling, native syscall entry, and hardware
 validation belong to the kernel, bootloader, and compiler checklists. The
-kernel already runs bounded AUN1 children and contains their faults on AHCI
-and NVMe. The remaining native terminal, file, IPC, and scheduling contracts
-are tracked in `../kernel/README.md` and `../../PLAN.md`.
+kernel already runs bounded AUN1 children, supports checked serial terminal
+writes, and contains their faults on AHCI and NVMe. The remaining native
+terminal, file, IPC, and scheduling contracts are tracked in
+`../kernel/README.md` and `../../PLAN.md`.
 
 - 🔴 Port system programs and command-line tools after the native syscall and
   compiler target contracts are available; keep the AUEX image as a checked
