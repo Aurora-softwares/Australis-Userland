@@ -1,0 +1,5 @@
+format = 2
+name = "AustralisDisplayDemoA"
+type = "exec"
+output = "system/Core/DisplayDemoA.exec"
+sources = ["./Program.hy"]

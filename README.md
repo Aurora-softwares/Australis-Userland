@@ -166,6 +166,8 @@ early recovery. The AUEX host can schedule multiple runnable children, while
 storage, USB, and timer drivers. `mem.exec` reports available pages and kernel
 heap usage. KMon provides `devices`, `memmap`, and `pages` without a userland
 process; detailed physical ranges from `memmap` require `D` Debug boot.
+System-information API version 5 lets `sys-info.exec` report the validated,
+fixed GOP framebuffer mode without exposing its physical address.
 
 - `echo.exec`, `tree.exec`, `mkdir.exec`, `touch.exec`, `cp.exec`, `mv.exec`,
   and `rm.exec` are separate source projects; `clear.exec` uses a checked
@@ -296,8 +298,9 @@ No service executes in an interrupt handler or retains resources after exit.
   wait, peer, and close calls. General event waits and shared buffers remain.
 - 🟢 Authenticate channel peers by kernel process identity; only a parent
   granted the channel capability can open a channel to its live child.
-- 🔴 Grant capabilities for devices, mounts, process inspection, system settings,
-  display ownership, input routing, and service control.
+- 🟡 Grant capabilities for devices, mounts, process inspection, system settings,
+  display ownership, input routing, and service control. Display ownership now
+  uses capability bit `2`; the other grants remain.
 - 🟡 Load path grants from the read-only `AUSC1` system manifest; malformed or
   missing policies grant nothing. Per-application requests and approvals remain.
 - 🟡 Channel versions are checked on send and accept; service-specific
@@ -316,13 +319,20 @@ buffers remain a separate planned extension.
   working directory, terminal, and process ownership. A login screen may
   select or start a session here; it is not a security boundary until the
   kernel enforces identity, access rules, and process isolation.
-- 🔴 Give `Display.service` exclusive display and routed-input capabilities.
-- 🔴 Implement a compositor, window protocol, surfaces, damage tracking, pointer
-  events, focus, and keyboard routing in userland.
+- 🟡 Give `Display.exec` exclusive display and routed-input capabilities. Its
+  sole display lease, owner-only mouse poll, and USB keyboard capture work;
+  general input grants for other services remain.
+- 🟡 Implement a compositor, window protocol, surfaces, damage tracking, pointer
+  events, focus, and keyboard routing in userland. The persistent AUEX display
+  service composes two channel clients with separate 4×4 RGB cell surfaces
+  and draws a movable cursor. It routes pointer and key events by focus and
+  redraws clipped damage. Live movement, resizing, stacking, and window
+  controls work; arbitrary client pixel surfaces and a general window
+  protocol remain.
 - 🔴 Build `DesktopShell.appb`, then `Terminal.appb` and `Explorer.appb` against
   the public display and launch protocols.
-- 🟢 Keep text-only startup as a supported configuration; it is the current
-  default and must remain available when graphical sessions are added.
+- 🟢 Keep text-only startup as a supported configuration. A missing or failed
+  optional display service still starts the serial shell and KMon recovery.
 
 ### Exit test
 

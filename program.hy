@@ -109,6 +109,23 @@ public class Program {
         return 1;
     }
 
+    private static int StartDisplay() {
+        int pid = System.Australis.Process.Spawn("/System/Core/Display.exec");
+        if (pid < 1) {
+            System.Console.WriteLine("System: display unavailable");
+            return 0;
+        }
+        int ready = System.Australis.Process.WaitReady(pid, 10000);
+        if (ready != 0) {
+            int terminated = System.Australis.Process.Terminate(pid);
+            int reaped = System.Australis.Process.Wait(pid);
+            System.Console.WriteLine("System: display unavailable");
+            return 0;
+        }
+        System.Console.WriteLine("System: display ready");
+        return pid;
+    }
+
     public static int Main(string[] args) {
         byte[] manifest = new byte[256];
         int length = LoadManifest(manifest);
@@ -137,7 +154,13 @@ public class Program {
             string name = Slice(manifest, fields[0], fields[1]);
             string path = Slice(manifest, fields[2], fields[3]);
             int readyRounds = fields[5] + fields[6] * 256;
+            int displayPid = 0;
+            if (fields[7] == 83) { displayPid = StartDisplay(); }
             int result = RunService(name, path, fields[4], readyRounds);
+            if (displayPid > 0) {
+                int terminated = System.Australis.Process.Terminate(displayPid);
+                int reaped = System.Australis.Process.Wait(displayPid);
+            }
             if (result != 0) { return result; }
             if (fields[7] == 83) { return 0; }
             cursor = next;

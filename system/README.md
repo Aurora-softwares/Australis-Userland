@@ -11,28 +11,35 @@ VFS, scheduling, system calls, and the KMon recovery path. See the
 ```text
 BOOTX64.EFI -> KERNEL.BIN -> /System/Core/System.exec (PID 1)
                                       -> Device.exec -> Storage.exec
-                                      -> CommandShell.exec
-                                      -> optional graphical session
+                                      -> Display.exec (optional, persistent)
+                                           -> DisplayDemoA.exec
+                                           -> DisplayDemoB.exec
+                                      -> CommandShell.exec (serial)
 ```
 
 The kernel starts `System.exec` only after mounting and validating the
 read-only HyFS 2 root. Initially it is a direct `.exec` payload at
 `/System/Core/System.exec`. `System.os` describes a later bundle for the
 same component; the extension does not grant privilege. The first normal
-session is text-only. GUI startup is optional and comes after service, IPC,
-and session contracts are in place.
+session retains the serial shell. The optional display service draws beside
+that session when the checked GOP mode is supported. A window click routes
+USB keyboard input to that window's client; a wallpaper click returns it to
+the shell. COM1 shell input stays active throughout.
 
 ## Current status and next gates
 
-The image builder installs `System.exec`, `Device.exec`, `Storage.exec`, and
-`CommandShell.exec` under `/System/Core`, plus the versioned
+The image builder installs `System.exec`, `Device.exec`, `Storage.exec`,
+`Display.exec`, its two demonstration clients, and `CommandShell.exec` under
+`/System/Core`, plus the versioned
 `/System/Config/startup.manifest` and
 `/System/Config/capabilities.manifest`. PID 1 starts the two one-shot readiness
-checks in manifest order, then the command shell. An explicit rescue or debug
+checks in manifest order, then tries to start the display service and the
+command shell. Display failure does not block the serial shell. An explicit rescue or debug
 boot enters KMon; a missing or failed system image falls back to KMon.
 The shell parses commands and arguments, maintains a working directory and
 exported environment, and launches foreground `/System/Bin` executables.
-PID 1 waits for each service to report readiness, then waits for its exit.
+PID 1 waits for one-shot services to report readiness and exit. It keeps the
+display service alive while the shell runs, then terminates and reaps it.
 The manifest sets each readiness bound and retry count. The command shell has
 three attempts; a clean exit ends the session without a retry.
 
@@ -46,12 +53,14 @@ corrupt HyFS metadata are covered by `make test-userland-stage3`.
 The AUEX runtime schedules live children in bounded instruction quanta and
 supports spawn, wait, readiness, termination, and timer-backed sleep. AUN1
 children use timer-preempted slices and can accept invited channels.
-Persistent service control and a session manager remain.
+General persistent-service supervision and a session manager remain.
 
 The `AUSC1` capability file contains `absolute path|mask` records. Bit `1`
 grants channel creation to a direct child. Missing, malformed, or unmatched
 records grant nothing. The kernel reads this file from the read-only root and
-checks the grant against the caller's process record on channel open.
+checks the grant against the caller's process record on channel open. Bit `2`
+allows one process to claim the exclusive display lease. `Display.exec` has
+mask `3`; its clients have no display capability.
 
 1. Stage 2 child context, launch errors, terminal parity, and repeated
    read-only command cleanup pass on AHCI and NVMe. Precise release after
