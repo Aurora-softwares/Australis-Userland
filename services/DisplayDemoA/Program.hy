@@ -19,8 +19,19 @@ public class Program {
 
     public static int Main(string[] args) {
         byte[] mouse = new byte[3];
+        byte[] stats = new byte[20];
         if (System.Australis.Display.Acquire() != -13 ||
             System.Australis.Display.FillRect(0, 0, 1, 1, 0) != -13 ||
+            System.Australis.Display.BeginFrame() != -13 ||
+            System.Australis.Display.PresentFrame() != -13 ||
+            System.Australis.Display.Stats(stats) != -13 ||
+            System.Australis.Display.AllocateBuffer(8, 8, 32, 1) != -13 ||
+            System.Australis.Display.BeginBuffer(1) != -13 ||
+            System.Australis.Display.FillBufferRect(1, 0, 0, 1, 1, 0) != -13 ||
+            System.Australis.Display.SubmitBuffer(1) != -13 ||
+            System.Australis.Display.BufferCompletion(1, 1) != -13 ||
+            System.Australis.Display.ReleaseBuffer(1, 1) != -13 ||
+            System.Australis.Display.DestroyBuffer(1) != -13 ||
             System.Australis.Display.PollMouse(mouse) != -13 ||
             System.Australis.Display.CaptureKeyboard(1) != -13 ||
             System.Australis.Display.PollKey() != -13) { return 3; }

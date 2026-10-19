@@ -160,6 +160,10 @@ public class Program {
             if (displayPid > 0) {
                 int terminated = System.Australis.Process.Terminate(displayPid);
                 int reaped = System.Australis.Process.Wait(displayPid);
+                if (terminated != 0 && reaped < 0) {
+                    System.Console.Write("System: display exit status=");
+                    System.Console.WriteLine(reaped);
+                }
             }
             if (result != 0) { return result; }
             if (fields[7] == 83) { return 0; }

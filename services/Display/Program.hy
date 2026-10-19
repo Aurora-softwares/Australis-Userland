@@ -511,8 +511,19 @@ public class Program {
         byte[] secondLayout, int focused, int top, int cursorX,
         int cursorY) {
         int count = dirty[0];
+        int opened = System.Australis.Display.BeginFrame();
+        int waits = 0;
+        while (opened == -11 && waits < 100) {
+            if (System.Australis.Process.Sleep(1) != 0) { return -5; }
+            opened = System.Australis.Display.BeginFrame();
+            waits = waits + 1;
+        }
+        if (opened != 0) { return -5; }
         int i = 0;
         while (i < count) {
+            // The backbuffer keeps this frame private while a large batch
+            // cooperatively yields between regions.
+            if (System.Australis.Process.Sleep(1) != 0) { return -5; }
             int offset = 1 + i * 8;
             int x = dirty[offset] + dirty[offset + 1] * 256;
             int y = dirty[offset + 2] + dirty[offset + 3] * 256;
@@ -527,7 +538,55 @@ public class Program {
                 Cursor(cursorX, cursorY) != 0) { return -5; }
             i = i + 1;
         }
+        if (System.Australis.Display.PresentFrame() != 0) { return -5; }
         dirty[0] = 0;
+        return waits;
+    }
+
+    private static int SubmitWithWait(int handle) {
+        int submitted = System.Australis.Display.SubmitBuffer(handle);
+        int waits = 0;
+        while (submitted == -11 && waits < 100) {
+            if (System.Australis.Process.Sleep(1) != 0) { return -5; }
+            submitted = System.Australis.Display.SubmitBuffer(handle);
+            waits = waits + 1;
+        }
+        return submitted;
+    }
+
+    private static int CheckBuffers(int width, int height) {
+        int first = System.Australis.Display.AllocateBuffer(width, height,
+            width * 4, 1);
+        int second = System.Australis.Display.AllocateBuffer(width, height,
+            width * 4, 1);
+        if (first < 1 || second <= first ||
+            System.Australis.Display.BeginBuffer(first) != 0 ||
+            System.Australis.Display.BeginBuffer(second) != 0 ||
+            System.Australis.Display.FillBufferRect(first, 0, 0, 1, 1,
+                0x123456) != 0 ||
+            System.Australis.Display.FillBufferRect(second, 0, 0, 1, 1,
+                0x654321) != 0) { return -1; }
+        int firstFence = SubmitWithWait(first);
+        if (firstFence < 1 ||
+            System.Australis.Display.BufferCompletion(first,
+                firstFence) != 1 ||
+            System.Australis.Display.BeginBuffer(first) != -16 ||
+            System.Australis.Display.DestroyBuffer(first) != -16) {
+            return -1;
+        }
+        int secondFence = SubmitWithWait(second);
+        if (secondFence <= firstFence ||
+            System.Australis.Display.BufferCompletion(second,
+                secondFence) != 1 ||
+            System.Australis.Display.ReleaseBuffer(first,
+                firstFence) != 0 ||
+            System.Australis.Display.ReleaseBuffer(second,
+                secondFence) != 0 ||
+            System.Australis.Display.DestroyBuffer(first) != 0 ||
+            System.Australis.Display.DestroyBuffer(second) != 0) {
+            return -1;
+        }
+        System.Console.WriteLine("Display: two owned buffers completed and released");
         return 0;
     }
 
@@ -539,6 +598,9 @@ public class Program {
         if (System.Australis.Display.Acquire() != 0) { return 2; }
         if (System.Australis.Display.SetMode(width, height) != -95) {
             int released = System.Australis.Display.Release(); return 8;
+        }
+        if (CheckBuffers(width, height) != 0) {
+            int released = System.Australis.Display.Release(); return 9;
         }
         int firstPid = System.Australis.Process.Spawn(
             "/System/Core/DisplayDemoA.exec");
@@ -590,10 +652,19 @@ public class Program {
         byte[] clip = new byte[8];
         SetClip(clip, 0, 0, width, height);
         int cursorX = width / 2; int cursorY = height / 2;
-        if (Compose(width, height, firstState, firstCells,
+        if (System.Australis.Display.BeginFrame() != 0 ||
+            Compose(width, height, firstState, firstCells,
             firstLayout, secondState, secondCells, secondLayout,
             clip, 0, 2) != 0 ||
-            Cursor(cursorX, cursorY) != 0) {
+            Cursor(cursorX, cursorY) != 0 ||
+            System.Australis.Display.PresentFrame() != 0) {
+            int released = System.Australis.Display.Release(); return 6;
+        }
+        byte[] frameStats = new byte[20];
+        if (System.Australis.Display.Stats(frameStats) != 20 ||
+            frameStats[0] != 3 || frameStats[4] != 3 ||
+            frameStats[8] != 0 ||
+            System.Australis.Display.BeginFrame() != -11) {
             int released = System.Australis.Display.Release(); return 6;
         }
         System.Console.WriteLine("Display: two client windows composed; cursor ready");
@@ -608,6 +679,8 @@ public class Program {
         int focused = 0; int top = 2; int captured = 0; int buttons = 0;
         int dragKind = 0; int dragId = 0;
         int failure = 0;
+        int metricsReported = 0;
+        int pacingWaits = 1; // Startup checks that the early frame is deferred.
         while (true) {
             int changed = Handle(firstChannel, 1, firstState, firstCells,
                 message, reply);
@@ -866,12 +939,47 @@ public class Program {
                 Damage(dirty, originalX, originalY, 14, 20, width, height);
                 Damage(dirty, cursorX, cursorY, 14, 20, width, height);
             }
-            if (dirty[0] > 0 && Flush(dirty, clip, width, height,
-                firstState, firstCells, firstLayout, secondState,
-                secondCells, secondLayout, focused, top,
-                cursorX, cursorY) != 0) {
-                System.Console.WriteLine("Display: redraw failure");
-                failure = 10; break;
+            if (dirty[0] > 0) {
+                int waitCount = Flush(dirty, clip, width, height,
+                    firstState, firstCells, firstLayout, secondState,
+                    secondCells, secondLayout, focused, top,
+                    cursorX, cursorY);
+                if (waitCount < 0) {
+                    System.Console.WriteLine("Display: redraw failure");
+                    failure = 10; break;
+                }
+                pacingWaits = pacingWaits + waitCount;
+                if (metricsReported == 0) {
+                    if (System.Australis.Display.Stats(frameStats) != 20) {
+                        System.Console.WriteLine("Display: frame stats failure");
+                        failure = 14; break;
+                    }
+                    int submitted = Read16(frameStats, 0) +
+                        Read16(frameStats, 2) * 65536;
+                    int presented = Read16(frameStats, 4) +
+                        Read16(frameStats, 6) * 65536;
+                    int dropped = Read16(frameStats, 8) +
+                        Read16(frameStats, 10) * 65536;
+                    if (submitted != presented || dropped != 0) {
+                        System.Console.WriteLine("Display: frame count failure");
+                        failure = 14; break;
+                    }
+                    if (presented >= 2) {
+                        int lastMicros = Read16(frameStats, 12) +
+                            Read16(frameStats, 14) * 65536;
+                        int maxMicros = Read16(frameStats, 16) +
+                            Read16(frameStats, 18) * 65536;
+                        System.Console.Write("Display: paced frames=");
+                        System.Console.Write(presented);
+                        System.Console.Write(" last_us=");
+                        System.Console.Write(lastMicros);
+                        System.Console.Write(" max_us=");
+                        System.Console.Write(maxMicros);
+                        System.Console.Write(" waits=");
+                        System.Console.WriteLine(pacingWaits);
+                        metricsReported = 1;
+                    }
+                }
             }
             if (focused > 0) {
                 int keys = 0;
