@@ -1058,7 +1058,9 @@ public class Program {
                 }
             }
             if (failure != 0) { break; }
-            int slept = System.Australis.Process.Sleep(10);
+            int sleepMilliseconds = 10;
+            if (moves > 0) { sleepMilliseconds = 2; }
+            int slept = System.Australis.Process.Sleep(sleepMilliseconds);
             if (slept != 0) {
                 System.Console.WriteLine("Display: sleep failure");
                 failure = 12; break;
