@@ -509,7 +509,7 @@ public class Program {
         int height, byte[] firstState, byte[] firstCells,
         byte[] firstLayout, byte[] secondState, byte[] secondCells,
         byte[] secondLayout, int focused, int top, int cursorX,
-        int cursorY) {
+        int cursorY, bool hardwareCursor) {
         int count = dirty[0];
         int opened = System.Australis.Display.BeginFrame();
         int waits = 0;
@@ -533,7 +533,8 @@ public class Program {
             if (Compose(width, height, firstState, firstCells,
                 firstLayout, secondState, secondCells, secondLayout,
                 clip, focused, top) != 0) { return -5; }
-            if (x < cursorX + 14 && x + rectWidth > cursorX &&
+            if (!hardwareCursor && x < cursorX + 14 &&
+                x + rectWidth > cursorX &&
                 y < cursorY + 20 && y + rectHeight > cursorY &&
                 Cursor(cursorX, cursorY) != 0) { return -5; }
             i = i + 1;
@@ -596,9 +597,11 @@ public class Program {
         if (width < 320 || width > 2048 || height < 240 ||
             height > 2048 || width * height > 1048576) { return 1; }
         if (System.Australis.Display.Acquire() != 0) { return 2; }
-        if (System.Australis.Display.SetMode(width, height) != -95) {
+        int initialMode = System.Australis.Display.SetMode(width, height);
+        if (initialMode != -95 && initialMode != 0) {
             int released = System.Australis.Display.Release(); return 8;
         }
+        bool hardwareCursor = System.Australis.SystemInfo.Query(29) / 4 % 2 == 1;
         if (CheckBuffers(width, height) != 0) {
             int released = System.Australis.Display.Release(); return 9;
         }
@@ -656,7 +659,7 @@ public class Program {
             Compose(width, height, firstState, firstCells,
             firstLayout, secondState, secondCells, secondLayout,
             clip, 0, 2) != 0 ||
-            Cursor(cursorX, cursorY) != 0 ||
+            (!hardwareCursor && Cursor(cursorX, cursorY) != 0) ||
             System.Australis.Display.PresentFrame() != 0) {
             int released = System.Australis.Display.Release(); return 6;
         }
@@ -682,6 +685,38 @@ public class Program {
         int metricsReported = 0;
         int pacingWaits = 1; // Startup checks that the early frame is deferred.
         while (true) {
+            if (initialMode == 0) {
+                int packedMode = System.Australis.Display.SetMode(0, 0);
+                if (packedMode < 0) {
+                    System.Console.WriteLine("Display: mode query failure");
+                    failure = 15; break;
+                }
+                int modeWidth = packedMode % 65536;
+                int modeHeight = packedMode / 65536 % 4096;
+                if (modeWidth != width || modeHeight != height) {
+                    width = modeWidth; height = modeHeight;
+                    hardwareCursor = packedMode / 268435456 % 2 == 1;
+                    int nextWindowWidth = width / 2 - 30;
+                    int nextWindowHeight = height / 2;
+                    if (width < 320 || height < 240 ||
+                        nextWindowWidth < 96 || nextWindowHeight < 80) {
+                        failure = 15; break;
+                    }
+                    InitLayout(firstLayout, 20, 48, nextWindowWidth,
+                        nextWindowHeight);
+                    InitLayout(secondLayout, width / 3, 72,
+                        nextWindowWidth, nextWindowHeight);
+                    captured = 0;
+                    dragKind = 0; dragId = 0; buttons = 0;
+                    cursorX = width / 2; cursorY = height / 2;
+                    dirty[0] = 0;
+                    Damage(dirty, 0, 0, width, height, width, height);
+                    System.Console.Write("Display: mode changed to ");
+                    System.Console.Write(width);
+                    System.Console.Write("x");
+                    System.Console.WriteLine(height);
+                }
+            }
             int changed = Handle(firstChannel, 1, firstState, firstCells,
                 message, reply);
             int other = Handle(secondChannel, 2, secondState, secondCells,
@@ -719,6 +754,7 @@ public class Program {
             CopyLayout(secondLayout, beforeSecond);
             int beforeTop = top; int beforeFocus = focused;
             int originalX = cursorX; int originalY = cursorY;
+            bool oldHardwareCursor = hardwareCursor;
             int moves = 0; int inputFailure = 0;
             while (moves < 16) {
                 int mouseResult = System.Australis.Display.PollMouse(mouse);
@@ -727,6 +763,7 @@ public class Program {
                     System.Console.WriteLine("Display: mouse input failure");
                     inputFailure = 1; break;
                 }
+                hardwareCursor = mouse[0] / 128 % 2 == 1;
                 int nextX = cursorX + mouse[1] - 128;
                 int nextY = cursorY + mouse[2] - 128;
                 if (nextX < 0) { nextX = 0; }
@@ -933,17 +970,22 @@ public class Program {
             if (beforeSecond[18] != secondLayout[18]) {
                 HeaderDamage(dirty, secondLayout, width, height);
             }
-            if (cursorX != originalX || cursorY != originalY) {
-                // Only the original cursor reached the framebuffer. Reports
-                // between it and the final position do not need restoring.
-                Damage(dirty, originalX, originalY, 14, 20, width, height);
-                Damage(dirty, cursorX, cursorY, 14, 20, width, height);
+            if (cursorX != originalX || cursorY != originalY ||
+                hardwareCursor != oldHardwareCursor) {
+                if (!oldHardwareCursor) {
+                    Damage(dirty, originalX, originalY, 14, 20,
+                        width, height);
+                }
+                if (!hardwareCursor) {
+                    Damage(dirty, cursorX, cursorY, 14, 20,
+                        width, height);
+                }
             }
             if (dirty[0] > 0) {
                 int waitCount = Flush(dirty, clip, width, height,
                     firstState, firstCells, firstLayout, secondState,
                     secondCells, secondLayout, focused, top,
-                    cursorX, cursorY);
+                    cursorX, cursorY, hardwareCursor);
                 if (waitCount < 0) {
                     System.Console.WriteLine("Display: redraw failure");
                     failure = 10; break;
@@ -991,6 +1033,20 @@ public class Program {
                         failure = 11; break;
                     }
                     if (key <= 255) {
+                        if (initialMode == 0 && key == 109) {
+                            int nextWidth = 1024;
+                            int nextHeight = 768;
+                            if (width == 1024 && height == 768) {
+                                nextWidth = 1280; nextHeight = 800;
+                            }
+                            if (System.Australis.Display.SetMode(nextWidth,
+                                nextHeight) != 0) {
+                                System.Console.WriteLine(
+                                    "Display: mode switch failure");
+                                failure = 15;
+                            }
+                            break;
+                        }
                         keyEvent[0] = 5; keyEvent[1] = (byte)focused;
                         keyEvent[2] = (byte)key;
                         int channel = firstChannel;
