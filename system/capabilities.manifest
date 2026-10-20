@@ -2,4 +2,5 @@ AUSC1
 /System/Core/System.exec|1
 /System/Bin/ipc-probe.exec|1
 /System/Bin/native-ipc-probe.exec|1
-/System/Core/Display.exec|3
+/System/Core/Display.exec|7
+/System/Core/DisplayDemoA.exec|4

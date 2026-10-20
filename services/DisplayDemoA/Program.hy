@@ -18,6 +18,19 @@ public class Program {
     }
 
     public static int Main(string[] args) {
+        int gpuHandle = System.Australis.Gpu.Create(8, 8);
+        if (gpuHandle > 0) {
+            if (System.Australis.Gpu.Clear(2, 0) != -13 ||
+                System.Australis.Gpu.Blit(gpuHandle, 0, 0) != -13 ||
+                System.Australis.Gpu.Clear(gpuHandle, 0xCB3830) != 0 ||
+                System.Australis.Gpu.ReadPixel(gpuHandle, 0, 0) <
+                    0xCA372F ||
+                System.Australis.Gpu.Destroy(gpuHandle) != 0 ||
+                System.Australis.Gpu.ReadPixel(gpuHandle, 0, 0) != -13) {
+                return 7;
+            }
+            System.Console.WriteLine("DisplayDemoA: GPU isolation passed");
+        } else if (gpuHandle != -19) { return 7; }
         byte[] mouse = new byte[3];
         byte[] stats = new byte[20];
         if (System.Australis.Display.Acquire() != -13 ||

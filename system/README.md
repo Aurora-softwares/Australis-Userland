@@ -60,7 +60,8 @@ grants channel creation to a direct child. Missing, malformed, or unmatched
 records grant nothing. The kernel reads this file from the read-only root and
 checks the grant against the caller's process record on channel open. Bit `2`
 allows one process to claim the exclusive display lease. `Display.exec` has
-mask `3`; its clients have no display capability.
+mask `7`, adding bit `4` for bounded GPU textures. `DisplayDemoA.exec` has
+bit `4` to exercise a separate context and handle; it has no display lease.
 
 1. Stage 2 child context, launch errors, terminal parity, and repeated
    read-only command cleanup pass on AHCI and NVMe. Precise release after

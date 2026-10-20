@@ -240,6 +240,22 @@ public class Program {
             Paint(x + 4, y + 14, 1, 5, 0xFFFFFF) != 0) { return -5; }
         return 0;
     }
+    private static int ComposeGpuTile(int handle, byte[] cells) {
+        if (handle < 1) { return 0; }
+        int rgb = cells[0] * 65536 + cells[1] * 256 + cells[2];
+        int cleared = System.Australis.Gpu.Clear(handle, rgb);
+        int blit = -1;
+        if (cleared == 0) {
+            blit = System.Australis.Gpu.Blit(handle, 30, 100);
+        }
+        if (cleared != 0 || blit != 0) {
+            System.Console.WriteLine(
+                "Display: GPU tile unavailable; software frame kept");
+            return 0;
+        }
+        System.Console.WriteLine("Display: GPU tile composed to scanout");
+        return 0;
+    }
 
     // Version 2: create [1,R,G,B], update [2,id,col,row,R,G,B],
     // close [3,id]. The kernel binds each channel to one child PID.
@@ -597,6 +613,34 @@ public class Program {
         if (width < 320 || width > 2048 || height < 240 ||
             height > 2048 || width * height > 1048576) { return 1; }
         if (System.Australis.Display.Acquire() != 0) { return 2; }
+        int gpuHandle = System.Australis.Gpu.Create(8, 8);
+        if (gpuHandle > 0) {
+            int second = System.Australis.Gpu.Create(8, 8);
+            int cleared = System.Australis.Gpu.Clear(gpuHandle, 0x228844);
+            int firstPixel = System.Australis.Gpu.ReadPixel(gpuHandle, 0, 0);
+            int filled = System.Australis.Gpu.FillRect(gpuHandle,
+                1, 1, 2, 2, 0x335577);
+            int changedPixel = System.Australis.Gpu.ReadPixel(gpuHandle,
+                1, 1);
+            int destroyed = System.Australis.Gpu.Destroy(gpuHandle);
+            int stale = System.Australis.Gpu.Clear(gpuHandle, 0);
+            if (second != -12 || cleared != 0 ||
+                firstPixel < 0x218743 || firstPixel > 0x238945 ||
+                filled != 0 || changedPixel < 0x325476 ||
+                changedPixel > 0x345678 || destroyed != 0 ||
+                stale != -13) {
+                int released = System.Australis.Display.Release();
+                return 10;
+            }
+            System.Console.WriteLine("Display: isolated GPU resource operations passed");
+            gpuHandle = System.Australis.Gpu.Create(8, 8);
+            if (gpuHandle < 1) {
+                int released = System.Australis.Display.Release();
+                return 10;
+            }
+        } else if (gpuHandle != -19) {
+            int released = System.Australis.Display.Release(); return 10;
+        }
         int initialMode = System.Australis.Display.SetMode(width, height);
         if (initialMode != -95 && initialMode != 0) {
             int released = System.Australis.Display.Release(); return 8;
@@ -628,6 +672,7 @@ public class Program {
                     message, reply) < 0 ||
                 Handle(secondChannel, 2, secondState, secondCells,
                     message, reply) < 0) {
+                System.Console.WriteLine("Display: client handshake failed");
                 int released = System.Australis.Display.Release(); return 5;
             }
             int slept = System.Australis.Process.Sleep(1);
@@ -637,6 +682,7 @@ public class Program {
             firstState[3] == 0 || secondState[3] == 0 ||
             firstState[4] == 0 || secondState[4] == 0 ||
             secondState[5] == 0) {
+            System.Console.WriteLine("Display: client startup timed out");
             int released = System.Australis.Display.Release(); return 5;
         }
         int windowWidth = width / 2 - 30;
@@ -659,6 +705,7 @@ public class Program {
             Compose(width, height, firstState, firstCells,
             firstLayout, secondState, secondCells, secondLayout,
             clip, 0, 2) != 0 ||
+            ComposeGpuTile(gpuHandle, firstCells) != 0 ||
             (!hardwareCursor && Cursor(cursorX, cursorY) != 0) ||
             System.Australis.Display.PresentFrame() != 0) {
             int released = System.Australis.Display.Release(); return 6;
