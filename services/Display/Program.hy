@@ -1,4 +1,41 @@
 public class Program {
+    private static int FocusedTitlebar() {
+        return 0xE5E8ED; //0x7DA7CB const
+    }
+    private static int UnfocusedTitlebar() {
+        return 0xE5E8ED; // 0xC7CED6 const
+    }
+    private static int WindowBackground() {
+        return 0xE5E8ED; // const
+    }
+    private static int WindowRadius() {
+        return 12; // const
+    }
+	private static int WindowBorder() {
+		return 0; // 8 const
+	}
+	private static int TitlebarHeight() {
+		return 30; // const
+	}
+	private static int WindowResizeGrip() {
+		return 10; // const
+	}
+
+	private static int TitlebarControlSize() {
+		return 12; // const
+	}
+	private static int TopbarHeight() {
+		return 30; // const
+	}
+	private static int ControlX(int barX, int index) {
+		int size = TitlebarControlSize();
+		return barX + 8 + index * (size + 10);
+	}
+	private static int ControlY(int barY, int barHeight) {
+		return barY +
+			(barHeight - TitlebarControlSize()) / 2;
+	}
+
     private static int Paint(int x, int y, int width, int height, int rgb) {
         if (width < 1 || height < 1 || width > 2048 || height > 2048) { return -22; }
         int rows = 65536 / width;
@@ -14,6 +51,202 @@ public class Program {
         }
         return 0;
     }
+
+	private static int RoundedInset(int row, int width, int height, int radius) {
+		if (radius > width / 2) {
+			radius = width / 2;
+		}
+
+		if (radius > height / 2) {
+			radius = height / 2;
+		}
+
+		if (radius <= 0 ||
+			(row >= radius && row < height - radius)) {
+			return 0;
+		}
+
+		int cornerY = row;
+
+		if (row >= height - radius) {
+			cornerY = height - row - 1;
+		}
+
+		int dy = radius * 2 - cornerY * 2 - 1;
+		int inset = 0;
+
+		while (inset < radius) {
+			int dx = radius * 2 - inset * 2 - 1;
+
+			if (dx * dx + dy * dy <=
+				radius * radius * 4) {
+				break;
+			}
+
+			inset = inset + 1;
+		}
+
+		return inset;
+	}
+
+	private static int RoundedBand(int x, int y, int width, int height, int firstRow, int lastRow, int radius, int color, byte[] clip) {
+		int row = firstRow;
+
+		while (row < lastRow) {
+			if (row >= radius && row < height - radius) {
+				int end = lastRow;
+
+				if (end > height - radius) {
+					end = height - radius;
+				}
+
+				if (Clip(
+					x, y + row, width,
+					end - row, color, clip
+				) != 0) {
+					return -5;
+				}
+
+				row = end;
+				continue;
+			}
+			int inset = RoundedInset(
+				row, width, height, radius
+			);
+
+			int next = row + 1;
+
+			while (next < lastRow &&
+				RoundedInset(next, width, height, radius) == inset) {
+				next = next + 1;
+			}
+
+			if (Clip(x + inset, y + row, width - inset * 2, next - row, color, clip) != 0) {
+				return -5;
+			}
+
+			row = next;
+		}
+
+		return 0;
+	}
+
+	private static int ClipWindowContent(int x, int y, int width, int height, int color, int windowX, int windowY, int windowWidth, int windowHeight, bool maximized, byte[] clip) {
+		if (width <= 0 || height <= 0) {
+			return 0;
+		}
+
+		// Clip to the window's rectangular bounds first.
+		int left = x;
+		int right = x + width;
+		int first = y;
+		int last = y + height;
+
+		if (left < windowX) {
+			left = windowX;
+		}
+		if (right > windowX + windowWidth) {
+			right = windowX + windowWidth;
+		}
+		if (first < windowY) {
+			first = windowY;
+		}
+		if (last > windowY + windowHeight) {
+			last = windowY + windowHeight;
+		}
+
+		if (right <= left || last <= first) {
+			return 0;
+		}
+
+		// Maximised windows are rectangular.
+		int radius = WindowRadius();
+
+		if (maximized || radius <= 0) {
+			return Clip(
+				left, first,
+				right - left, last - first,
+				color, clip
+			);
+		}
+
+		if (radius > windowWidth / 2) {
+			radius = windowWidth / 2;
+		}
+		if (radius > windowHeight / 2) {
+			radius = windowHeight / 2;
+		}
+
+		int row = first;
+
+		// TOP CORNERS: rounded clipping.
+		while (row < last && row < windowY + radius) {
+			int inset = RoundedInset(row - windowY, windowWidth, windowHeight, radius);
+
+			int startX = left;
+			int endX = right;
+
+			if (startX < windowX + inset) {
+				startX = windowX + inset;
+			}
+			if (endX > windowX + windowWidth - inset) {
+				endX = windowX + windowWidth - inset;
+			}
+
+			if (endX > startX) {
+				if (Clip(
+					startX, row, endX - startX,
+					1, color, clip
+				) != 0) {
+					return -5;
+				}
+			}
+
+			row = row + 1;
+		}
+
+		// MIDDLE: one rectangular draw.
+		int middleEnd = windowY + windowHeight - radius;
+
+		if (row < last && row < middleEnd) {
+			int end = last;
+
+			if (end > middleEnd) {
+				end = middleEnd;
+			}
+
+			if (Clip(left, row, right - left, end - row, color, clip) != 0) {
+				return -5;
+			}
+
+			row = end;
+		}
+
+		// BOTTOM CORNERS: rounded clipping.
+		while (row < last) {
+			int inset = RoundedInset(row - windowY, windowWidth, windowHeight, radius);
+
+			int startX = left;
+			int endX = right;
+
+			if (startX < windowX + inset) {
+				startX = windowX + inset;
+			}
+			if (endX > windowX + windowWidth - inset) {
+				endX = windowX + windowWidth - inset;
+			}
+
+			if (endX > startX) {
+				if (Clip(startX, row, endX - startX, 1, color, clip) != 0) {
+					return -5;
+				}
+			}
+
+			row = row + 1;
+		}
+
+		return 0;
+	}
 
     // Each compositor-owned layout stores x, y, width, height, visibility,
     // maximization, restore geometry, and the hovered control. Clients never
@@ -34,10 +267,58 @@ public class Program {
     private static bool Visible(byte[] state, byte[] layout) {
         return state[1] == 1 && layout[8] == 1;
     }
-    private static int ContentTop(byte[] layout) {
-        int top = Read16(layout, 2) + 36;
-        if (layout[9] == 1) { top = Read16(layout, 2) + 8; }
-        return top;
+	private static int ContentTop(byte[] layout) {
+		int top = Read16(layout, 2) + TitlebarHeight();
+
+		if (layout[9] == 1) {
+			top = Read16(layout, 2) + 8;
+		}
+
+		return top;
+	}
+    private static int ContentWidth(byte[] layout) {
+        return Read16(layout, 4) - 16;
+    }
+    private static int ContentHeight(byte[] layout) {
+        return Read16(layout, 2) + Read16(layout, 6) - 8 -
+            ContentTop(layout);
+    }
+    private static int UpdateTextureCell(int handle, byte[] layout,
+        byte[] cells, int column, int row) {
+        if (handle < 1 || column < 0 || column >= 4 ||
+            row < 0 || row >= 4) { return -22; }
+        int width = ContentWidth(layout);
+        int height = ContentHeight(layout);
+        int left = column * width / 4;
+        int right = (column + 1) * width / 4;
+        int top = row * height / 4;
+        int bottom = (row + 1) * height / 4;
+        int cell = (row * 4 + column) * 3;
+        int rgb = cells[cell] * 65536 + cells[cell + 1] * 256 +
+            cells[cell + 2];
+        return System.Australis.Gpu.FillRect(handle, left, top,
+            right - left, bottom - top, rgb);
+    }
+    private static int CreateWindowTexture(byte[] layout, byte[] cells) {
+        int width = ContentWidth(layout);
+        int height = ContentHeight(layout);
+        if (width < 1 || height < 1) { return -22; }
+        int handle = System.Australis.Gpu.Create(width, height);
+        if (handle < 1) { return handle; }
+        int row = 0;
+        while (row < 4) {
+            int column = 0;
+            while (column < 4) {
+                if (UpdateTextureCell(handle, layout, cells,
+                    column, row) != 0) {
+                    System.Australis.Gpu.Destroy(handle);
+                    return -5;
+                }
+                column = column + 1;
+            }
+            row = row + 1;
+        }
+        return handle;
     }
     private static void CopyLayout(byte[] source, byte[] target) {
         int i = 0;
@@ -57,8 +338,10 @@ public class Program {
             Write16(layout, 12, Read16(layout, 2));
             Write16(layout, 14, Read16(layout, 4));
             Write16(layout, 16, Read16(layout, 6));
-            Write16(layout, 0, 0); Write16(layout, 2, 32);
-            Write16(layout, 4, width); Write16(layout, 6, height - 32);
+			Write16(layout, 0, 0);
+			Write16(layout, 2, TopbarHeight());
+			Write16(layout, 4, width);
+			Write16(layout, 6, height - TopbarHeight());
             layout[9] = 1;
         } else {
             Write16(layout, 0, Read16(layout, 10));
@@ -92,110 +375,212 @@ public class Program {
         return Paint(x, y, right - x, bottom - y, rgb);
     }
 
-    private static int DrawControl(int x, int y, int color, int kind,
-        bool hovered, byte[] clip) {
-        int row = 0;
-        while (row < 10) {
-            int inset = 0;
-            if (row == 0 || row == 9) { inset = 3; }
-            else if (row == 1 || row == 8) { inset = 1; }
-            if (Clip(x + inset, y + row, 10 - inset * 2, 1,
-                color, clip) != 0) { return -5; }
-            row = row + 1;
-        }
-        if (hovered) {
-            if (kind == 1) {
-                int i = 0;
-                while (i < 4) {
-                    if (Clip(x + 3 + i, y + 3 + i, 1, 1,
-                            0xFFFFFF, clip) != 0 ||
-                        Clip(x + 6 - i, y + 3 + i, 1, 1,
-                            0xFFFFFF, clip) != 0) { return -5; }
-                    i = i + 1;
-                }
-            } else {
-                if (Clip(x + 3, y + 5, 4, 1, 0xFFFFFF, clip) != 0) {
-                    return -5;
-                }
-                if (kind == 3 && Clip(x + 5, y + 3, 1, 5,
-                    0xFFFFFF, clip) != 0) { return -5; }
-            }
-        }
-        return 0;
-    }
-    private static int DrawControls(int x, int y, byte[] layout,
-        byte[] clip) {
-        if (DrawControl(x + 8, y + 8, 0xFF5F57, 1,
-                layout[18] == 1, clip) != 0 ||
-            DrawControl(x + 28, y + 8, 0xFEBC2E, 2,
-                layout[18] == 2, clip) != 0 ||
-            DrawControl(x + 48, y + 8, 0x28C840, 3,
-                layout[18] == 3, clip) != 0) { return -5; }
-        return 0;
-    }
+	private static int DrawControl(int x, int y, int color, int kind, bool hovered, byte[] clip) {
+		int size = TitlebarControlSize();
 
-    private static int DrawWindow(byte[] layout, byte[] cells,
-        byte[] clip, bool focused) {
+		// Draw a filled circle.
+		int row = 0;
+
+		while (row < size) {
+			int dy = row * 2 + 1 - size;
+			int inset = 0;
+
+			while (inset < size) {
+				int dx = inset * 2 + 1 - size;
+
+				if (dx * dx + dy * dy <= size * size) {
+					break;
+				}
+
+				inset = inset + 1;
+			}
+			int span = size - inset * 2;
+			if (span > 0) {
+				if (Clip(x + inset, y + row, span, 1, color, clip) != 0) {
+					return -5;
+				}
+			}
+			row = row + 1;
+		}
+
+		// Draw the hover icon, scaled to the button.
+		if (hovered) {
+			int iconSize = size * 4 / 10;
+			if (iconSize < 3) {
+				iconSize = 3;
+			}
+
+			int offset = (size - iconSize) / 2;
+			int center = size / 2;
+
+			if (kind == 1) {
+				// Close: X
+				int i = 0;
+
+				while (i < iconSize) {
+					if (Clip(
+						x + offset + i,
+						y + offset + i,
+						1, 1, 0xFFFFFF, clip
+					) != 0 ||
+						Clip(
+						x + offset + iconSize - i - 1,
+						y + offset + i,
+						1, 1, 0xFFFFFF, clip
+					) != 0) {
+						return -5;
+					}
+
+					i = i + 1;
+				}
+			} else {
+				// Minimise: horizontal line
+				if (Clip(
+					x + offset, y + center,
+					iconSize, 1, 0xFFFFFF, clip
+				) != 0) {
+					return -5;
+				}
+
+				if (kind == 3) {
+					// Maximise: vertical line
+					if (Clip(
+						x + center, y + offset,
+						1, iconSize, 0xFFFFFF, clip
+					) != 0) {
+						return -5;
+					}
+				}
+			}
+		}
+
+		return 0;
+	}
+	private static int DrawControls(int x, int y, int barHeight, byte[] layout, byte[] clip) {
+		int controlY = ControlY(y, barHeight);
+
+		if (DrawControl(
+			ControlX(x, 0), controlY,
+			0xFF5F57, 1, layout[18] == 1, clip
+		) != 0 ||
+			DrawControl(
+			ControlX(x, 1), controlY,
+			0xFEBC2E, 2, layout[18] == 2, clip
+		) != 0 ||
+			DrawControl(
+			ControlX(x, 2), controlY,
+			0x28C840, 3, layout[18] == 3, clip
+		) != 0) {
+			return -5;
+		}
+
+		return 0;
+	}
+
+    private static int DrawWindow(byte[] layout, byte[] cells, byte[] clip, bool focused, int gpuHandle) {
         int x = Read16(layout, 0); int y = Read16(layout, 2);
         int width = Read16(layout, 4); int height = Read16(layout, 6);
         int top = ContentTop(layout);
-        if (layout[9] == 1) {
-            if (Clip(x, y, width, height, 0xE5E8ED, clip) != 0) {
-                return -5;
-            }
-        } else {
-            int header = 0xC7CED6;
-            if (focused) { header = 0x7DA7CB; }
-            if (Clip(x, y + 4, width, height - 8, 0xE5E8ED,
-                    clip) != 0 ||
-                Clip(x + 4, y, width - 8, 4, 0xE5E8ED,
-                    clip) != 0 ||
-                Clip(x + 4, y + height - 4, width - 8, 4,
-                    0xE5E8ED, clip) != 0 ||
-                Clip(x, y + 4, width, 24, header, clip) != 0 ||
-                Clip(x + 4, y, width - 8, 4, header, clip) != 0 ||
-                DrawControls(x, y, layout, clip) != 0) { return -5; }
+		if (layout[9] == 1) {
+			// Maximised windows remain square.
+			if (Clip(x, y, width, height, WindowBackground(), clip) != 0) {
+				return -5;
+			}
+		} else {
+			int header = UnfocusedTitlebar();
+			if (focused) {
+				header = FocusedTitlebar();
+			}
+			if (RoundedBand(x, y, width, height, 0, height, WindowRadius(), WindowBackground(), clip) != 0) {
+				return -5;
+			}
+			System.Console.WriteLine("DBG: window background complete");
+			if (RoundedBand(x, y, width, height, 0, TitlebarHeight(), WindowRadius(), header, clip) != 0) {
+				return -5;
+			}
+			if (DrawControls(x, y, TitlebarHeight(), layout, clip) != 0) {
+				return -5;
+			}
+		}
+        int clipX = Read16(clip, 0);
+        int clipY = Read16(clip, 2);
+        int clipRight = clipX + Read16(clip, 4);
+        int clipBottom = clipY + Read16(clip, 6);
+        int contentLeft = x + 8;
+        int contentRight = x + width - 8;
+        int contentBottom = y + height - 8;
+        int left = contentLeft;
+        int upper = top;
+        int right = contentRight;
+        int lower = contentBottom;
+        if (left < clipX) { left = clipX; }
+        if (upper < clipY) { upper = clipY; }
+        if (right > clipRight) { right = clipRight; }
+        if (lower > clipBottom) { lower = clipBottom; }
+        if (right <= left || lower <= upper) { return 0; }
+        if (gpuHandle > 0 && System.Australis.Gpu.BlitRegion(gpuHandle, left - contentLeft, upper - top, right - left, lower - upper, left, upper) == 0) {
+            return 0;
         }
         int row = 0;
         while (row < 4) {
             int column = 0;
             while (column < 4) {
-                int left = x + 8 + column * (width - 16) / 4;
-                int right = x + 8 + (column + 1) * (width - 16) / 4;
-                int cellTop = top + row * (y + height - 8 - top) / 4;
-                int bottom = top + (row + 1) * (y + height - 8 - top) / 4;
+                int left = x + WindowBorder() + column * (width - (WindowBorder() / 2)) / 4;
+                int right = x + WindowBorder() + (column + 1) * (width - (WindowBorder() / 2)) / 4;
+                int cellTop = top + row * (y + height - WindowBorder() - top) / 4;
+                int bottom = top + (row + 1) * (y + height - WindowBorder() - top) / 4;
                 int cell = (row * 4 + column) * 3;
-                int rgb = cells[cell] * 65536 + cells[cell + 1] * 256 +
-                    cells[cell + 2];
-                if (Clip(left, cellTop, right - left, bottom - cellTop,
-                    rgb, clip) != 0) { return -5; }
+                int rgb = cells[cell] * 65536 + cells[cell + 1] * 256 + cells[cell + 2];
+                if (ClipWindowContent(left, cellTop, right - left, bottom - cellTop, rgb, x, y, width, height, layout[9] == 1, clip) != 0) {
+					return -5;
+				}
                 column = column + 1;
             }
             row = row + 1;
         }
+		System.Console.WriteLine("DBG: window content complete");
         return 0;
     }
 
-    private static int Compose(int width, int height, byte[] firstState,
-        byte[] firstCells, byte[] firstLayout, byte[] secondState,
-        byte[] secondCells, byte[] secondLayout, byte[] clip,
-        int focused, int top) {
-        if (Clip(0, 0, width, height, 0x26384F, clip) != 0) { return -5; }
+    private static int Compose(int width, int height, byte[] firstState, byte[] firstCells, byte[] firstLayout, byte[] secondState, byte[] secondCells, byte[] secondLayout, byte[] clip, int focused, int top, int firstGpu, int secondGpu) {
+		if (Clip(0, 0, width, height, 0x26384F, clip) != 0) { return -5; }
         if (top == 1) {
             if (Visible(secondState, secondLayout) &&
                 DrawWindow(secondLayout, secondCells, clip,
-                    focused == 2) != 0) { return -5; }
+                    focused == 2, secondGpu) != 0) { return -5; }
             if (Visible(firstState, firstLayout) &&
                 DrawWindow(firstLayout, firstCells, clip,
-                    focused == 1) != 0) { return -5; }
-        } else {
-            if (Visible(firstState, firstLayout) &&
-                DrawWindow(firstLayout, firstCells, clip,
-                    focused == 1) != 0) { return -5; }
-            if (Visible(secondState, secondLayout) &&
-                DrawWindow(secondLayout, secondCells, clip,
-                    focused == 2) != 0) { return -5; }
-        }
+                    focused == 1, firstGpu) != 0) { return -5; }
+			} else {
+				System.Console.WriteLine("DBG: drawing first window");
+
+				if (Visible(firstState, firstLayout) &&
+					DrawWindow(firstLayout, firstCells, clip,
+						focused == 1, firstGpu) != 0) {
+					return -5;
+				}
+
+				System.Console.WriteLine("DBG: first window finished");
+
+				// Yield to the scheduler and reset the instruction watchdog.
+				if (System.Australis.Process.Sleep(1) != 0) {
+					return -5;
+				}
+
+				System.Console.WriteLine("DBG: drawing second window");
+
+				if (Visible(secondState, secondLayout) &&
+					DrawWindow(secondLayout, secondCells, clip,
+						focused == 2, secondGpu) != 0) {
+					return -5;
+				}
+
+				System.Console.WriteLine("DBG: second window finished");
+
+				if (System.Australis.Process.Sleep(1) != 0) {
+					return -5;
+				}
+			}
         int maxId = 0;
         if (top == 1 && Visible(firstState, firstLayout) &&
             firstLayout[9] == 1) { maxId = 1; }
@@ -203,13 +588,15 @@ public class Program {
             secondLayout[9] == 1) { maxId = 2; }
         int bar = 0x111820;
         if (maxId > 0) { bar = 0x000000; }
-        if (Clip(0, 0, width, 32, bar, clip) != 0) { return -5; }
-        if (maxId == 1 && DrawControls(0, 2, firstLayout, clip) != 0) {
-            return -5;
-        }
-        if (maxId == 2 && DrawControls(0, 2, secondLayout, clip) != 0) {
-            return -5;
-        }
+        if (Clip(0, 0, width, TopbarHeight(), bar, clip) != 0) {
+			return -5;
+		}
+		if (maxId == 1 && DrawControls(0, 0, TopbarHeight(), firstLayout, clip) != 0) {
+			return -5;
+		}
+		if (maxId == 2 && DrawControls(0, 0, TopbarHeight(), secondLayout, clip) != 0) {
+			return -5;
+		}
         if (firstState[1] == 1) {
             int color = 0xCB3830;
             if (firstLayout[8] == 0) { color = 0x617080; }
@@ -240,7 +627,8 @@ public class Program {
             Paint(x + 4, y + 14, 1, 5, 0xFFFFFF) != 0) { return -5; }
         return 0;
     }
-    private static int ComposeGpuTile(int handle, byte[] cells) {
+    private static int ComposeGpuTile(int handle, int target,
+        byte[] cells) {
         if (handle < 1) { return 0; }
         int rgb = cells[0] * 65536 + cells[1] * 256 + cells[2];
         int cleared = System.Australis.Gpu.Clear(handle, rgb);
@@ -252,6 +640,26 @@ public class Program {
             System.Console.WriteLine(
                 "Display: GPU tile unavailable; software frame kept");
             return 0;
+        }
+        if (System.Australis.Gpu.BlitRegion(handle, 2, 2, 1, 1, 30, 100) != 0 || System.Australis.Gpu.BlitRegion(handle, 7, 7, 2, 1, 30, 100) != -22) {
+            System.Console.WriteLine("Display: GPU region blit failed");
+            return -5;
+        }
+        System.Console.WriteLine("Display: GPU region blit passed");
+        if (target > 0) {
+            if (System.Australis.Gpu.FillRect(handle,
+                    2, 2, 1, 1, 0x123456) != 0 ||
+                System.Australis.Gpu.CopyRegion(handle,
+                    target, 2, 2, 1, 1, 0, 0) != 0 ||
+                System.Australis.Gpu.ReadPixel(target, 0, 0) != 0x123456 ||
+                System.Australis.Gpu.CopyRegion(handle,
+                    target, 7, 7, 2, 1, 0, 0) != -22 ||
+                System.Australis.Gpu.FillRect(target,
+                    0, 0, 1, 1, rgb) != 0) {
+                System.Console.WriteLine("Display: GPU texture copy failed");
+                return -5;
+            }
+            System.Console.WriteLine("Display: GPU texture copy passed");
         }
         System.Console.WriteLine("Display: GPU tile composed to scanout");
         return 0;
@@ -426,25 +834,44 @@ public class Program {
         if (!Visible(state, layout)) { return false; }
         int left = Read16(layout, 0); int top = Read16(layout, 2);
         int width = Read16(layout, 4); int height = Read16(layout, 6);
-        if (x < left || x >= left + width || y < top ||
-            y >= top + height) { return false; }
-        if (layout[9] == 0 &&
-            (x < left + 4 || x >= left + width - 4) &&
-            (y < top + 4 || y >= top + height - 4)) { return false; }
+        if (x < left || x >= left + width || y < top || y >= top + height) {
+			return false;
+		}
+		if (layout[9] == 0) {
+			int localX = x - left;
+			int localY = y - top;
+
+			int inset = RoundedInset(
+				localY, width, height, WindowRadius()
+			);
+
+			if (localX < inset || localX >= width - inset) {
+				return false;
+			}
+		}
         return true;
     }
-    private static int Hit(int x, int y, byte[] firstState,
-        byte[] firstLayout, byte[] secondState, byte[] secondLayout,
-        int top) {
-        if (top == 1) {
-            if (HitWindow(x, y, firstState, firstLayout)) { return 1; }
-            if (HitWindow(x, y, secondState, secondLayout)) { return 2; }
-        } else {
-            if (HitWindow(x, y, secondState, secondLayout)) { return 2; }
-            if (HitWindow(x, y, firstState, firstLayout)) { return 1; }
-        }
-        return 0;
-    }
+	private static int Hit(int x, int y, byte[] firstState, byte[] firstLayout, byte[] secondState, byte[] secondLayout, int top) {
+		if (top == 1) {
+			if (Visible(firstState, firstLayout) && (ResizeEdges(x, y, firstLayout) != 0 || HitWindow(x, y, firstState, firstLayout))) {
+				return 1;
+			}
+
+			if (Visible(secondState, secondLayout) && (ResizeEdges(x, y, firstLayout) != 0 || HitWindow(x, y, secondState, secondLayout))) {
+				return 2;
+			}
+		} else {
+			if (Visible(secondState, secondLayout) && (ResizeEdges(x, y, firstLayout) != 0 || HitWindow(x, y, secondState, secondLayout))) {
+				return 2;
+			}
+
+			if (Visible(firstState, firstLayout) && (ResizeEdges(x, y, firstLayout) != 0 || HitWindow(x, y, firstState, firstLayout))) {
+				return 1;
+			}
+		}
+
+		return 0;
+	}
 
     private static bool ContentHit(int x, int y, byte[] layout) {
         int left = Read16(layout, 0); int top = Read16(layout, 2);
@@ -457,10 +884,10 @@ public class Program {
         int width, int height) {
         if (layout[8] == 0) { return; }
         if (layout[9] == 1) {
-            Damage(dirty, 0, 0, width, 32, width, height);
+            Damage(dirty, 0, 0, width, TopbarHeight(), width, height);
         } else {
             Damage(dirty, Read16(layout, 0), Read16(layout, 2),
-                Read16(layout, 4), 28, width, height);
+                Read16(layout, 4), TitlebarHeight(), width, height);
         }
     }
     private static int MenuHit(int x, int y, int width,
@@ -472,27 +899,72 @@ public class Program {
             secondState[1] == 1) { return 2; }
         return 0;
     }
-    private static int ControlHit(int x, int y, byte[] layout) {
-        int left = Read16(layout, 0); int top = Read16(layout, 2);
-        if (layout[9] == 1) { left = 0; top = 2; }
-        if (y < top + 8 || y >= top + 18) { return 0; }
-        if (x >= left + 8 && x < left + 18) { return 1; }
-        if (x >= left + 28 && x < left + 38) { return 2; }
-        if (x >= left + 48 && x < left + 58) { return 3; }
-        return 0;
-    }
-    private static bool ResizeHit(int x, int y, byte[] layout) {
-        if (layout[9] == 1) { return false; }
-        int left = Read16(layout, 0); int top = Read16(layout, 2);
-        int width = Read16(layout, 4); int height = Read16(layout, 6);
-        return x >= left + width - 12 || y >= top + height - 12;
-    }
-    private static bool TitleHit(int x, int y, byte[] layout) {
-        if (layout[9] == 1) { return false; }
-        int left = Read16(layout, 0); int top = Read16(layout, 2);
-        return x >= left + 70 && x < left + Read16(layout, 4) - 12 &&
-            y >= top && y < top + 28;
-    }
+	private static int ControlHit(int x, int y, byte[] layout) {
+		int left = Read16(layout, 0);
+		int top = Read16(layout, 2);
+		int barHeight = TitlebarHeight();
+		if (layout[9] == 1) {
+			left = 0;
+			top = 0;
+			barHeight = TopbarHeight();
+		}
+		int size = TitlebarControlSize();
+		int controlY = ControlY(top, barHeight);
+		if (y < controlY || y >= controlY + size) {
+			return 0;
+		}
+		int index = 0;
+		while (index < 3) {
+			int controlX = ControlX(left, index);
+			if (x >= controlX && x < controlX + size) {
+				return index + 1;
+			}
+			index = index + 1;
+		}
+
+		return 0;
+	}
+	private static int ResizeEdges(int x, int y, byte[] layout) {
+		if (layout[9] == 1 || layout[8] == 0) {
+			return 0;
+		}
+
+		int left = Read16(layout, 0);
+		int top = Read16(layout, 2);
+		int right = left + Read16(layout, 4);
+		int bottom = top + Read16(layout, 6);
+
+		if (x < left || x >= right ||
+			y < top || y >= bottom) {
+			return 0;
+		}
+
+		int grip = WindowResizeGrip();
+		int edges = 0;
+
+		if (x < left + grip) {
+			edges = edges + 1;
+		} else if (x >= right - grip) {
+			edges = edges + 2;
+		}
+
+		if (y < top + grip) {
+			edges = edges + 4;
+		} else if (y >= bottom - grip) {
+			edges = edges + 8;
+		}
+
+		return edges;
+	}
+	private static bool TitleHit(int x, int y, byte[] layout) {
+		if (layout[9] == 1) {
+			return false;
+		}
+		int left = Read16(layout, 0);
+		int top = Read16(layout, 2);
+		int controlsEnd = ControlX(left, 2) + TitlebarControlSize() + 12;
+		return x >= controlsEnd && x < left + Read16(layout, 4) - 12 && y >= top && y < top + TitlebarHeight();
+	}
 
     // Kinds: 1 move, 2 down, 3 up. Coordinates are clipped to the
     // target's content and never name another client's surface.
@@ -525,7 +997,8 @@ public class Program {
         int height, byte[] firstState, byte[] firstCells,
         byte[] firstLayout, byte[] secondState, byte[] secondCells,
         byte[] secondLayout, int focused, int top, int cursorX,
-        int cursorY, bool hardwareCursor) {
+        int cursorY, bool hardwareCursor, int firstGpu,
+        int secondGpu) {
         int count = dirty[0];
         int opened = System.Australis.Display.BeginFrame();
         int waits = 0;
@@ -548,7 +1021,9 @@ public class Program {
             SetClip(clip, x, y, rectWidth, rectHeight);
             if (Compose(width, height, firstState, firstCells,
                 firstLayout, secondState, secondCells, secondLayout,
-                clip, focused, top) != 0) { return -5; }
+                clip, focused, top, firstGpu, secondGpu) != 0) {
+                return -5;
+            }
             if (!hardwareCursor && x < cursorX + 14 &&
                 x + rectWidth > cursorX &&
                 y < cursorY + 20 && y + rectHeight > cursorY &&
@@ -616,6 +1091,8 @@ public class Program {
         int gpuHandle = System.Australis.Gpu.Create(8, 8);
         if (gpuHandle > 0) {
             int second = System.Australis.Gpu.Create(8, 8);
+            int third = System.Australis.Gpu.Create(8, 8);
+            int fourth = System.Australis.Gpu.Create(8, 8);
             int cleared = System.Australis.Gpu.Clear(gpuHandle, 0x228844);
             int firstPixel = System.Australis.Gpu.ReadPixel(gpuHandle, 0, 0);
             int filled = System.Australis.Gpu.FillRect(gpuHandle,
@@ -623,8 +1100,12 @@ public class Program {
             int changedPixel = System.Australis.Gpu.ReadPixel(gpuHandle,
                 1, 1);
             int destroyed = System.Australis.Gpu.Destroy(gpuHandle);
+            int secondDestroyed = System.Australis.Gpu.Destroy(second);
+            int thirdDestroyed = System.Australis.Gpu.Destroy(third);
             int stale = System.Australis.Gpu.Clear(gpuHandle, 0);
-            if (second != -12 || cleared != 0 ||
+            if (second < 1 || third < 1 || fourth != -12 ||
+                secondDestroyed != 0 || thirdDestroyed != 0 ||
+                cleared != 0 ||
                 firstPixel < 0x218743 || firstPixel > 0x238945 ||
                 filled != 0 || changedPixel < 0x325476 ||
                 changedPixel > 0x345678 || destroyed != 0 ||
@@ -649,13 +1130,13 @@ public class Program {
         if (CheckBuffers(width, height) != 0) {
             int released = System.Australis.Display.Release(); return 9;
         }
-        int firstPid = System.Australis.Process.Spawn(
-            "/System/Core/DisplayDemoA.exec");
-        int secondPid = System.Australis.Process.Spawn(
-            "/System/Core/DisplayDemoB.exec");
+		System.Console.WriteLine("DBG 1: starting demo clients");
+        int firstPid = System.Australis.Process.Spawn("/System/Core/DisplayDemoA.exec");
+        int secondPid = System.Australis.Process.Spawn("/System/Core/DisplayDemoB.exec");
         if (firstPid < 1 || secondPid < 1) {
             int released = System.Australis.Display.Release(); return 3;
         }
+		System.Console.WriteLine("DBG 2: channels opened");
         int firstChannel = System.Australis.Channel.Open(firstPid, 2);
         int secondChannel = System.Australis.Channel.Open(secondPid, 2);
         if (firstChannel < 1 || secondChannel < 1) {
@@ -685,6 +1166,7 @@ public class Program {
             System.Console.WriteLine("Display: client startup timed out");
             int released = System.Australis.Display.Release(); return 5;
         }
+		System.Console.WriteLine("DBG 3: clients ready");
         int windowWidth = width / 2 - 30;
         int windowHeight = height / 2;
         if (windowWidth < 96 || windowHeight < 80 ||
@@ -692,24 +1174,98 @@ public class Program {
             72 + windowHeight > height) {
             int released = System.Australis.Display.Release(); return 6;
         }
+        if (gpuHandle > 0) {
+            int windowTexture = System.Australis.Gpu.Create(
+                windowWidth, windowHeight);
+            int windowClear = -1; int windowPixel = -1;
+            if (windowTexture > 0) {
+                windowClear = System.Australis.Gpu.Clear(windowTexture,
+                    0x31658C);
+                windowPixel = System.Australis.Gpu.ReadPixel(windowTexture,
+                    windowWidth - 1, windowHeight - 1);
+            }
+            int windowDestroy = -1;
+            if (windowTexture > 0) {
+                windowDestroy = System.Australis.Gpu.Destroy(windowTexture);
+            }
+            if (windowTexture < 1 || windowClear != 0 ||
+                windowPixel < 0x30648B ||
+                windowPixel > 0x32668D ||
+                windowDestroy != 0) {
+                System.Console.Write("Display: window texture failed ");
+                System.Console.Write(windowTexture);
+                System.Console.Write(" ");
+                System.Console.Write(windowClear);
+                System.Console.Write(" ");
+                System.Console.Write(windowPixel);
+                System.Console.Write(" ");
+                System.Console.WriteLine(windowDestroy);
+                int released = System.Australis.Display.Release(); return 10;
+            }
+            System.Console.WriteLine(
+                "Display: window-sized GPU texture passed");
+        }
         byte[] firstLayout = new byte[19];
         byte[] secondLayout = new byte[19];
         byte[] beforeFirst = new byte[19];
         byte[] beforeSecond = new byte[19];
         InitLayout(firstLayout, 20, 48, windowWidth, windowHeight);
         InitLayout(secondLayout, width / 3, 72, windowWidth, windowHeight);
+        int firstGpu = -1; int secondGpu = -1;
+        if (gpuHandle > 0) {
+            firstGpu = CreateWindowTexture(firstLayout, firstCells);
+            secondGpu = CreateWindowTexture(secondLayout, secondCells);
+            if (firstGpu > 0 && secondGpu > 0) {
+                System.Console.WriteLine(
+                    "Display: two GPU-backed window contents ready");
+            }
+        }
         byte[] clip = new byte[8];
         SetClip(clip, 0, 0, width, height);
         int cursorX = width / 2; int cursorY = height / 2;
-        if (System.Australis.Display.BeginFrame() != 0 ||
-            Compose(width, height, firstState, firstCells,
-            firstLayout, secondState, secondCells, secondLayout,
-            clip, 0, 2) != 0 ||
-            ComposeGpuTile(gpuHandle, firstCells) != 0 ||
-            (!hardwareCursor && Cursor(cursorX, cursorY) != 0) ||
-            System.Australis.Display.PresentFrame() != 0) {
-            int released = System.Australis.Display.Release(); return 6;
-        }
+		System.Console.WriteLine("DBG 4: starting first frame");
+
+		int result = System.Australis.Display.BeginFrame();
+
+		System.Console.Write("DBG BeginFrame: ");
+		System.Console.WriteLine(result);
+
+		if (result == 0) {
+			System.Console.WriteLine("DBG 5: entering Compose");
+
+			result = Compose(
+				width, height,
+				firstState, firstCells, firstLayout,
+				secondState, secondCells, secondLayout,
+				clip, 0, 2, firstGpu, secondGpu
+			);
+
+			System.Console.Write("DBG Compose: ");
+			System.Console.WriteLine(result);
+		}
+
+		if (result == 0) {
+			System.Console.WriteLine("DBG 6: GPU tile");
+			result = ComposeGpuTile(gpuHandle, firstGpu, firstCells);
+		}
+
+		if (result == 0 && !hardwareCursor) {
+			System.Console.WriteLine("DBG 7: cursor");
+			result = Cursor(cursorX, cursorY);
+		}
+
+		if (result == 0) {
+			System.Console.WriteLine("DBG 8: presenting");
+			result = System.Australis.Display.PresentFrame();
+		}
+
+		if (result != 0) {
+			System.Console.Write("Display startup failed: ");
+			System.Console.WriteLine(result);
+
+			int released = System.Australis.Display.Release();
+			return 6;
+		}
         byte[] frameStats = new byte[20];
         if (System.Australis.Display.Stats(frameStats) != 20 ||
             frameStats[0] != 3 || frameStats[4] != 3 ||
@@ -726,8 +1282,19 @@ public class Program {
         byte[] dirty = new byte[129];
         byte[] pointerEvent = new byte[7];
         byte[] keyEvent = new byte[3];
-        int focused = 0; int top = 2; int captured = 0; int buttons = 0;
-        int dragKind = 0; int dragId = 0;
+        int focused = 0;
+		int top = 2;
+		int captured = 0;
+		int buttons = 0;
+        int dragKind = 0;
+		int dragId = 0;
+		int dragEdges = 0;
+		int resizeStartMouseX = 0;
+		int resizeStartMouseY = 0;
+		int resizeStartX = 0;
+		int resizeStartY = 0;
+		int resizeStartWidth = 0;
+		int resizeStartHeight = 0;
         int failure = 0;
         int metricsReported = 0;
         int pacingWaits = 1; // Startup checks that the early frame is deferred.
@@ -753,6 +1320,13 @@ public class Program {
                         nextWindowHeight);
                     InitLayout(secondLayout, width / 3, 72,
                         nextWindowWidth, nextWindowHeight);
+                    firstGpu = -1; secondGpu = -1;
+                    if (gpuHandle > 0) {
+                        firstGpu = CreateWindowTexture(firstLayout,
+                            firstCells);
+                        secondGpu = CreateWindowTexture(secondLayout,
+                            secondCells);
+                    }
                     captured = 0;
                     dragKind = 0; dragId = 0; buttons = 0;
                     cursorX = width / 2; cursorY = height / 2;
@@ -773,13 +1347,36 @@ public class Program {
                 failure = 8; break;
             }
             if (changed == 1) {
+                if (firstState[1] == 1 && gpuHandle > 0) {
+                    if (firstGpu > 0) { System.Australis.Gpu.Destroy(firstGpu); }
+                    firstGpu = CreateWindowTexture(firstLayout, firstCells);
+                }
                 Damage(dirty, 0, 0, width, height, width, height);
             } else if (changed == 2) {
+                if (firstGpu > 0 && UpdateTextureCell(firstGpu,
+                    firstLayout, firstCells, firstState[6],
+                    firstState[7]) != 0) {
+                    System.Australis.Gpu.Destroy(firstGpu);
+                    firstGpu = -1;
+                }
                 DamageCell(dirty, firstState, firstLayout, width, height);
             }
             if (other == 1) {
+                if (secondState[1] == 1 && gpuHandle > 0) {
+                    if (secondGpu > 0) {
+                        System.Australis.Gpu.Destroy(secondGpu);
+                    }
+                    secondGpu = CreateWindowTexture(secondLayout,
+                        secondCells);
+                }
                 Damage(dirty, 0, 0, width, height, width, height);
             } else if (other == 2) {
+                if (secondGpu > 0 && UpdateTextureCell(secondGpu,
+                    secondLayout, secondCells, secondState[6],
+                    secondState[7]) != 0) {
+                    System.Australis.Gpu.Destroy(secondGpu);
+                    secondGpu = -1;
+                }
                 DamageCell(dirty, secondState, secondLayout, width, height);
             }
             if ((focused == 1 && !Visible(firstState, firstLayout)) ||
@@ -834,7 +1431,7 @@ public class Program {
                     } else {
                         int hit = Hit(cursorX, cursorY, firstState,
                             firstLayout, secondState, secondLayout, top);
-                        if (cursorY < 32) {
+                        if (cursorY < TopbarHeight()) {
                             byte[] active = firstLayout;
                             byte[] activeState = firstState;
                             if (top == 2) {
@@ -881,19 +1478,89 @@ public class Program {
                                 }
                             } else if (control == 3) {
                                 ToggleMax(selected, width, height);
-                            } else if (ResizeHit(cursorX, cursorY,
-                                selected)) {
-                                dragKind = 2; dragId = hit;
-                            } else if (TitleHit(cursorX, cursorY,
-                                selected)) {
+							} else if (ResizeEdges(cursorX, cursorY, selected) != 0) {
+								dragKind = 2;
+								dragId = hit;
+								dragEdges = ResizeEdges(
+									cursorX, cursorY, selected
+								);
+								resizeStartMouseX = cursorX;
+								resizeStartMouseY = cursorY;
+								resizeStartX = Read16(selected, 0);
+								resizeStartY = Read16(selected, 2);
+								resizeStartWidth = Read16(selected, 4);
+								resizeStartHeight = Read16(selected, 6);
+                            } else if (TitleHit(cursorX, cursorY, selected)) {
                                 dragKind = 1; dragId = hit;
-                            } else if (ContentHit(cursorX, cursorY,
-                                selected)) {
-                                captured = hit;
-                                Pointer(hit, 2, cursorX, cursorY,
-                                    firstLayout, secondLayout, firstChannel,
-                                    secondChannel, pointerEvent);
-                            }
+                            } else if (dragKind == 2) {
+								int dx = cursorX - resizeStartMouseX;
+								int dy = cursorY - resizeStartMouseY;
+
+								int leftEdge = resizeStartX;
+								int topEdge = resizeStartY;
+
+								int rightEdge = resizeStartX + resizeStartWidth;
+								int bottomEdge = resizeStartY + resizeStartHeight;
+
+								// LEFT
+								if (dragEdges % 2 == 1) {
+									leftEdge = resizeStartX + dx;
+
+									if (leftEdge < 0) {
+										leftEdge = 0;
+									}
+
+									if (leftEdge > rightEdge - 96) {
+										leftEdge = rightEdge - 96;
+									}
+								}
+
+								// RIGHT
+								if (dragEdges / 2 % 2 == 1) {
+									rightEdge = resizeStartX + resizeStartWidth + dx;
+
+									if (rightEdge > width) {
+										rightEdge = width;
+									}
+
+									if (rightEdge < leftEdge + 96) {
+										rightEdge = leftEdge + 96;
+									}
+								}
+
+								// TOP
+								if (dragEdges / 4 % 2 == 1) {
+									topEdge = resizeStartY + dy;
+
+									if (topEdge < TopbarHeight()) {
+										topEdge = TopbarHeight();
+									}
+
+									if (topEdge > bottomEdge - 80) {
+										topEdge = bottomEdge - 80;
+									}
+								}
+
+								// BOTTOM
+								if (dragEdges / 8 % 2 == 1) {
+									bottomEdge =
+										resizeStartY + resizeStartHeight + dy;
+
+									if (bottomEdge > height) {
+										bottomEdge = height;
+									}
+
+									if (bottomEdge < topEdge + 80) {
+										bottomEdge = topEdge + 80;
+									}
+								}
+
+								Write16(selected, 0, leftEdge);
+								Write16(selected, 2, topEdge);
+
+								Write16(selected, 4, rightEdge - leftEdge);
+								Write16(selected, 6, bottomEdge - topEdge);
+							}
                         }
                     }
                     if (focused != previousFocus) {
@@ -909,35 +1576,98 @@ public class Program {
                         (deltaX != 0 || deltaY != 0)) {
                         byte[] selected = firstLayout;
                         if (dragId == 2) { selected = secondLayout; }
-                        int x = Read16(selected, 0);
-                        int y = Read16(selected, 2);
-                        int windowWidth = Read16(selected, 4);
-                        int windowHeight = Read16(selected, 6);
-                        if (dragKind == 1) {
-                            x = x + deltaX; y = y + deltaY;
-                            if (x < 0) { x = 0; }
-                            if (y < 32) { y = 32; }
-                            if (x + windowWidth > width) {
-                                x = width - windowWidth;
-                            }
-                            if (y + windowHeight > height) {
-                                y = height - windowHeight;
-                            }
-                            Write16(selected, 0, x); Write16(selected, 2, y);
-                        } else {
-                            windowWidth = windowWidth + deltaX;
-                            windowHeight = windowHeight + deltaY;
-                            if (windowWidth < 96) { windowWidth = 96; }
-                            if (windowHeight < 80) { windowHeight = 80; }
-                            if (x + windowWidth > width) {
-                                windowWidth = width - x;
-                            }
-                            if (y + windowHeight > height) {
-                                windowHeight = height - y;
-                            }
-                            Write16(selected, 4, windowWidth);
-                            Write16(selected, 6, windowHeight);
-                        }
+						int x = Read16(selected, 0);
+						int y = Read16(selected, 2);
+						int windowWidth = Read16(selected, 4);
+						int windowHeight = Read16(selected, 6);
+
+						if (dragKind == 1) {
+							// MOVE WINDOW
+							x = x + deltaX;
+							y = y + deltaY;
+
+							if (x < 0) {
+								x = 0;
+							}
+							if (y < TopbarHeight()) {
+								y = TopbarHeight();
+							}
+							if (x + windowWidth > width) {
+								x = width - windowWidth;
+							}
+							if (y + windowHeight > height) {
+								y = height - windowHeight;
+							}
+
+							Write16(selected, 0, x);
+							Write16(selected, 2, y);
+						}
+						else if (dragKind == 2) {
+							// RESIZE WINDOW
+							int dx = cursorX - resizeStartMouseX;
+							int dy = cursorY - resizeStartMouseY;
+
+							// Work from the ORIGINAL boundaries.
+							int left = resizeStartX;
+							int top = resizeStartY;
+
+							int right = resizeStartX + resizeStartWidth;
+							int bottom = resizeStartY + resizeStartHeight;
+
+							// LEFT
+							if (dragEdges % 2 == 1) {
+								left = resizeStartX + dx;
+
+								if (left < 0) {
+									left = 0;
+								}
+								if (left > right - 96) {
+									left = right - 96;
+								}
+							}
+
+							// RIGHT
+							if (dragEdges / 2 % 2 == 1) {
+								right = resizeStartX + resizeStartWidth + dx;
+
+								if (right > width) {
+									right = width;
+								}
+								if (right < left + 96) {
+									right = left + 96;
+								}
+							}
+
+							// TOP
+							if (dragEdges / 4 % 2 == 1) {
+								top = resizeStartY + dy;
+
+								if (top < TopbarHeight()) {
+									top = TopbarHeight();
+								}
+								if (top > bottom - 80) {
+									top = bottom - 80;
+								}
+							}
+
+							// BOTTOM
+							if (dragEdges / 8 % 2 == 1) {
+								bottom = resizeStartY + resizeStartHeight + dy;
+
+								if (bottom > height) {
+									bottom = height;
+								}
+								if (bottom < top + 80) {
+									bottom = top + 80;
+								}
+							}
+
+							// Important: update BOTH position and dimensions.
+							Write16(selected, 0, left);
+							Write16(selected, 2, top);
+							Write16(selected, 4, right - left);
+							Write16(selected, 6, bottom - top);
+						}
                     } else if (captured > 0 &&
                         (deltaX != 0 || deltaY != 0)) {
                         Pointer(captured, 1, cursorX, cursorY,
@@ -958,7 +1688,7 @@ public class Program {
             if (inputFailure != 0) { failure = 9; break; }
             int hoverHit = Hit(cursorX, cursorY, firstState,
                 firstLayout, secondState, secondLayout, top);
-            if (cursorY < 32) {
+            if (cursorY < TopbarHeight()) {
                 byte[] active = firstLayout;
                 byte[] activeState = firstState;
                 if (top == 2) {
@@ -979,6 +1709,18 @@ public class Program {
                     secondLayout);
             }
             if (LayoutChanged(beforeFirst, firstLayout)) {
+                if (Read16(beforeFirst, 4) != Read16(firstLayout, 4) ||
+                    Read16(beforeFirst, 6) != Read16(firstLayout, 6) ||
+                    beforeFirst[9] != firstLayout[9]) {
+                    if (firstGpu > 0) {
+                        System.Australis.Gpu.Destroy(firstGpu);
+                    }
+                    firstGpu = -1;
+                    if (gpuHandle > 0) {
+                        firstGpu = CreateWindowTexture(firstLayout,
+                            firstCells);
+                    }
+                }
                 DamageTransition(dirty, beforeFirst, firstLayout,
                     width, height);
                 if (beforeFirst[9] != firstLayout[9]) {
@@ -986,6 +1728,18 @@ public class Program {
                 }
             }
             if (LayoutChanged(beforeSecond, secondLayout)) {
+                if (Read16(beforeSecond, 4) != Read16(secondLayout, 4) ||
+                    Read16(beforeSecond, 6) != Read16(secondLayout, 6) ||
+                    beforeSecond[9] != secondLayout[9]) {
+                    if (secondGpu > 0) {
+                        System.Australis.Gpu.Destroy(secondGpu);
+                    }
+                    secondGpu = -1;
+                    if (gpuHandle > 0) {
+                        secondGpu = CreateWindowTexture(secondLayout,
+                            secondCells);
+                    }
+                }
                 DamageTransition(dirty, beforeSecond, secondLayout,
                     width, height);
                 if (beforeSecond[9] != secondLayout[9]) {
@@ -1032,7 +1786,8 @@ public class Program {
                 int waitCount = Flush(dirty, clip, width, height,
                     firstState, firstCells, firstLayout, secondState,
                     secondCells, secondLayout, focused, top,
-                    cursorX, cursorY, hardwareCursor);
+                    cursorX, cursorY, hardwareCursor,
+                    firstGpu, secondGpu);
                 if (waitCount < 0) {
                     System.Console.WriteLine("Display: redraw failure");
                     failure = 10; break;

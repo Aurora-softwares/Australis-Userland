@@ -22,6 +22,8 @@ public class Program {
         if (gpuHandle > 0) {
             if (System.Australis.Gpu.Clear(2, 0) != -13 ||
                 System.Australis.Gpu.Blit(gpuHandle, 0, 0) != -13 ||
+                System.Australis.Gpu.CopyRegion(gpuHandle, gpuHandle,
+                    0, 0, 1, 1, 0, 0) != -13 ||
                 System.Australis.Gpu.Clear(gpuHandle, 0xCB3830) != 0 ||
                 System.Australis.Gpu.ReadPixel(gpuHandle, 0, 0) <
                     0xCA372F ||
