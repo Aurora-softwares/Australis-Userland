@@ -857,11 +857,11 @@ public class Program {
 				return 1;
 			}
 
-			if (Visible(secondState, secondLayout) && (ResizeEdges(x, y, firstLayout) != 0 || HitWindow(x, y, secondState, secondLayout))) {
+			if (Visible(secondState, secondLayout) && (ResizeEdges(x, y, secondLayout) != 0 || HitWindow(x, y, secondState, secondLayout))) {
 				return 2;
 			}
 		} else {
-			if (Visible(secondState, secondLayout) && (ResizeEdges(x, y, firstLayout) != 0 || HitWindow(x, y, secondState, secondLayout))) {
+			if (Visible(secondState, secondLayout) && (ResizeEdges(x, y, secondLayout) != 0 || HitWindow(x, y, secondState, secondLayout))) {
 				return 2;
 			}
 
@@ -1320,6 +1320,12 @@ public class Program {
                         nextWindowHeight);
                     InitLayout(secondLayout, width / 3, 72,
                         nextWindowWidth, nextWindowHeight);
+                    if (firstGpu > 0) {
+                        System.Australis.Gpu.Destroy(firstGpu);
+                    }
+                    if (secondGpu > 0) {
+                        System.Australis.Gpu.Destroy(secondGpu);
+                    }
                     firstGpu = -1; secondGpu = -1;
                     if (gpuHandle > 0) {
                         firstGpu = CreateWindowTexture(firstLayout,
