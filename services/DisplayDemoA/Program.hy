@@ -21,6 +21,7 @@ public class Program {
         int gpuHandle = System.Australis.Gpu.Create(8, 8);
         if (gpuHandle > 0) {
             if (System.Australis.Gpu.Clear(2, 0) != -13 ||
+                System.Australis.Gpu.FillFrameRect(0, 0, 8, 8, 0xFFFFFF) != -13 ||
                 System.Australis.Gpu.Blit(gpuHandle, 0, 0) != -13 ||
                 System.Australis.Gpu.CopyRegion(gpuHandle, gpuHandle,
                     0, 0, 1, 1, 0, 0) != -13 ||

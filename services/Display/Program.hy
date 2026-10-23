@@ -36,6 +36,162 @@ public class Program {
 			(barHeight - TitlebarControlSize()) / 2;
 	}
 
+    private static int GpuDrawDecoratedWindow(
+        byte[] layout,
+        int gpuHandle,
+        bool focused) {
+
+        if (gpuHandle < 1 || layout[9] != 0) {
+            return -95;
+        }
+
+        int x = Read16(layout, 0);
+        int y = Read16(layout, 2);
+        int width = Read16(layout, 4);
+        int height = Read16(layout, 6);
+
+        int header = UnfocusedTitlebar();
+
+        if (focused) {
+            header = FocusedTitlebar();
+        }
+
+        // Existing software window background.
+        if (System.Australis.Gpu.FillFrameRect(
+            x, y, width, height,
+            WindowBackground()) != 0) {
+            return -5;
+        }
+
+        // Existing titlebar geometry and colour.
+        if (System.Australis.Gpu.FillFrameRect(
+            x, y, width, TitlebarHeight(),
+            header) != 0) {
+            return -5;
+        }
+
+        // Real process-owned window content.
+        if (System.Australis.Gpu.DrawWindow(
+            gpuHandle,
+            x + 8,
+            ContentTop(layout)) != 0) {
+            return -5;
+        }
+
+        return 0;
+    }
+
+    private static int ProbeGpuDecoratedWindows(
+        int firstGpu, int secondGpu,
+        byte[] firstLayout, byte[] secondLayout,
+        int screenWidth, int screenHeight) {
+
+        if (firstGpu < 1 || secondGpu < 1 ||
+            firstLayout[9] != 0 ||
+            secondLayout[9] != 0) {
+            return -22;
+        }
+
+        int ax = Read16(firstLayout, 0);
+        int ay = Read16(firstLayout, 2);
+        int bx = Read16(secondLayout, 0);
+        int by = Read16(secondLayout, 2);
+
+        int contentX = ax + 8;
+        int contentY = ContentTop(firstLayout);
+
+        // A point covered by A's content and B's titlebar.
+        int overlapX = bx + 16;
+        int overlapY = by + TitlebarHeight() / 2;
+
+        if (overlapX < contentX ||
+            overlapY < contentY ||
+            overlapX >= contentX + ContentWidth(firstLayout) ||
+            overlapY >= contentY + ContentHeight(firstLayout)) {
+            return -22;
+        }
+
+        int firstPixel =
+            System.Australis.Gpu.ReadPixel(firstGpu, 12, 12);
+
+        int secondPixel =
+            System.Australis.Gpu.ReadPixel(secondGpu, 12, 12);
+
+        int overlapPixel =
+            System.Australis.Gpu.ReadPixel(
+                firstGpu,
+                overlapX - contentX,
+                overlapY - contentY);
+
+        if (firstPixel < 0 || secondPixel < 0 ||
+            overlapPixel < 0 ||
+            NearGpuRgb(overlapPixel, FocusedTitlebar())) {
+            return -5;
+        }
+
+        // Frame 1: B is above A.
+        if (System.Australis.Gpu.BeginFrame(0x26384F) != 0 ||
+            GpuDrawDecoratedWindow(
+                firstLayout, firstGpu, false) != 0 ||
+            GpuDrawDecoratedWindow(
+                secondLayout, secondGpu, true) != 0 ||
+            System.Australis.Gpu.FillFrameRect(
+                0, 0, screenWidth, TopbarHeight(),
+                0x111820) != 0 ||
+            System.Australis.Gpu.EndFrame() != 0) {
+            return -5;
+        }
+
+        if (!NearGpuRgb(
+                System.Australis.Gpu.FramePixel(2, 2),
+                0x111820) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    screenWidth - 2, screenHeight - 2),
+                0x26384F) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    ax + 3, ay + TitlebarHeight() + 4),
+                WindowBackground()) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    contentX + 12, contentY + 12),
+                firstPixel) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    bx + 20, ContentTop(secondLayout) + 12),
+                secondPixel) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    overlapX, overlapY),
+                FocusedTitlebar())) {
+            return -5;
+        }
+
+        // Frame 2: A is above B.
+        if (System.Australis.Gpu.BeginFrame(0x26384F) != 0 ||
+            GpuDrawDecoratedWindow(
+                secondLayout, secondGpu, false) != 0 ||
+            GpuDrawDecoratedWindow(
+                firstLayout, firstGpu, true) != 0 ||
+            System.Australis.Gpu.FillFrameRect(
+                0, 0, screenWidth, TopbarHeight(),
+                0x111820) != 0 ||
+            System.Australis.Gpu.EndFrame() != 0) {
+            return -5;
+        }
+
+        // A's content must now cover B's titlebar.
+        if (!NearGpuRgb(
+            System.Australis.Gpu.FramePixel(
+                overlapX, overlapY),
+            overlapPixel)) {
+            return -5;
+        }
+
+        return 0;
+    }
+
     private static int Paint(int x, int y, int width, int height, int rgb) {
         if (width < 1 || height < 1 || width > 2048 || height > 2048) { return -22; }
         int rows = 65536 / width;
@@ -130,6 +286,42 @@ public class Program {
 
 		return 0;
 	}
+
+    private static int GpuRoundedBand(
+        int x, int y, int width, int height,
+        int firstRow, int lastRow,
+        int radius, int rgb) {
+
+        int row = firstRow;
+
+        while (row < lastRow) {
+            int inset = RoundedInset(
+                row, width, height, radius);
+
+            int next = row + 1;
+
+            // Combine consecutive rows with identical bounds.
+            while (next < lastRow &&
+                RoundedInset(
+                    next, width, height, radius) == inset) {
+                next = next + 1;
+            }
+
+            int span = width - inset * 2;
+
+            if (span > 0) {
+                if (System.Australis.Gpu.FillFrameRect(
+                    x + inset, y + row,
+                    span, next - row, rgb) != 0) {
+                    return -5;
+                }
+            }
+
+            row = next;
+        }
+
+        return 0;
+    }
 
 	private static int ClipWindowContent(int x, int y, int width, int height, int color, int windowX, int windowY, int windowWidth, int windowHeight, bool maximized, byte[] clip) {
 		if (width <= 0 || height <= 0) {
@@ -456,26 +648,173 @@ public class Program {
 
 		return 0;
 	}
+
+    private static int GpuDrawControl(
+        int x, int y, int color,
+        int kind, bool hovered) {
+
+        int size = TitlebarControlSize();
+        int row = 0;
+
+        while (row < size) {
+            int inset = ControlInset(row, size);
+            int next = row + 1;
+
+            while (next < size &&
+                ControlInset(next, size) == inset) {
+                next = next + 1;
+            }
+
+            int span = size - inset * 2;
+
+            if (span > 0) {
+                if (System.Australis.Gpu.FillFrameRect(
+                    x + inset, y + row,
+                    span, next - row, color) != 0) {
+                    return -5;
+                }
+            }
+
+            row = next;
+        }
+
+        // Use the same hover symbols as the software path.
+        if (hovered) {
+            int iconSize = size * 4 / 10;
+            if (iconSize < 3) { iconSize = 3; }
+
+            int offset = (size - iconSize) / 2;
+            int center = size / 2;
+
+            if (kind == 1) {
+                int i = 0;
+                while (i < iconSize) {
+                    if (System.Australis.Gpu.FillFrameRect(
+                        x + offset + i,
+                        y + offset + i,
+                        1, 1, 0xFFFFFF) != 0 ||
+                        System.Australis.Gpu.FillFrameRect(
+                        x + offset + iconSize - i - 1,
+                        y + offset + i,
+                        1, 1, 0xFFFFFF) != 0) {
+                        return -5;
+                    }
+                    i = i + 1;
+                }
+            } else {
+                if (System.Australis.Gpu.FillFrameRect(
+                    x + offset, y + center,
+                    iconSize, 1, 0xFFFFFF) != 0) {
+                    return -5;
+                }
+
+                if (kind == 3) {
+                    if (System.Australis.Gpu.FillFrameRect(
+                        x + center, y + offset,
+                        1, iconSize, 0xFFFFFF) != 0) {
+                        return -5;
+                    }
+                }
+            }
+        }
+
+        return 0;
+    }
+
 	private static int DrawControls(int x, int y, int barHeight, byte[] layout, byte[] clip) {
 		int controlY = ControlY(y, barHeight);
 
-		if (DrawControl(
-			ControlX(x, 0), controlY,
-			0xFF5F57, 1, layout[18] == 1, clip
-		) != 0 ||
-			DrawControl(
-			ControlX(x, 1), controlY,
-			0xFEBC2E, 2, layout[18] == 2, clip
-		) != 0 ||
-			DrawControl(
-			ControlX(x, 2), controlY,
-			0x28C840, 3, layout[18] == 3, clip
-		) != 0) {
+		if (DrawControl(ControlX(x, 0), controlY, 0xFF5F57, 1, layout[18] == 1, clip) != 0 ||
+			DrawControl(ControlX(x, 1), controlY, 0xFEBC2E, 2, layout[18] == 2, clip) != 0 ||
+			DrawControl(ControlX(x, 2), controlY, 0x28C840, 3, layout[18] == 3, clip) != 0) {
 			return -5;
 		}
 
 		return 0;
 	}
+
+    private static int GpuDrawControls(int x, int y, byte[] layout) {
+        int controlY = ControlY(y, TitlebarHeight());
+
+        if (GpuDrawControl(
+            ControlX(x, 0), controlY, 0xFF5F57, 1, layout[18] == 1) != 0 ||
+            GpuDrawControl(ControlX(x, 1), controlY, 0xFEBC2E, 2, layout[18] == 2) != 0 ||
+            GpuDrawControl(ControlX(x, 2), controlY, 0x28C840, 3, layout[18] == 3) != 0) {
+            return -5;
+        }
+
+        return 0;
+    }
+
+    private static int ControlInset(int row, int size) {
+        int dy = row * 2 + 1 - size;
+        int inset = 0;
+
+        while (inset < size) {
+            int dx = inset * 2 + 1 - size;
+
+            if (dx * dx + dy * dy <= size * size) {
+                break;
+            }
+
+            inset = inset + 1;
+        }
+
+        return inset;
+    }
+
+    private static int GpuDrawRoundedWindow(
+        byte[] layout, int handle, bool focused) {
+
+        if (handle < 1 || layout[9] != 0) {
+            return -95;
+        }
+
+        int x = Read16(layout, 0);
+        int y = Read16(layout, 2);
+        int width = Read16(layout, 4);
+        int height = Read16(layout, 6);
+
+        int header = UnfocusedTitlebar();
+
+        if (focused) {
+            header = FocusedTitlebar();
+        }
+
+        // Entire rounded window background.
+        if (GpuRoundedBand(
+            x, y, width, height,
+            0, height,
+            WindowRadius(),
+            WindowBackground()) != 0) {
+            System.Console.WriteLine("GPUDBG: rounded window background failed ");
+            return -5;
+        }
+
+        // Rounded top corners; straight bottom of titlebar.
+        if (GpuRoundedBand(
+            x, y, width, height,
+            0, TitlebarHeight(),
+            WindowRadius(), header) != 0) {
+            System.Console.WriteLine("GPUDBG: rounded titlebar failed");
+            return -5;
+        }
+
+        // Existing process-owned GPU window texture.
+        if (System.Australis.Gpu.DrawWindow(
+            handle, x + 8, ContentTop(layout)) != 0) {
+            System.Console.WriteLine("GPUDBG: rounded window texture failed");
+            return -5;
+        }
+
+        // Foreground window controls.
+        if (GpuDrawControls(x, y, layout) != 0) {
+        System.Console.WriteLine("GPUDBG: rounded window controls failed");
+            return -5;
+        }
+
+        return 0;
+    }
 
     private static int DrawWindow(byte[] layout, byte[] cells, byte[] clip, bool focused, int gpuHandle) {
         int x = Read16(layout, 0); int y = Read16(layout, 2);
@@ -1216,16 +1555,175 @@ public class Program {
             firstGpu = CreateWindowTexture(firstLayout, firstCells);
             secondGpu = CreateWindowTexture(secondLayout, secondCells);
             if (firstGpu > 0 && secondGpu > 0) {
-                System.Console.WriteLine(
-                    "Display: two GPU-backed window contents ready");
+                System.Console.WriteLine("Display: two GPU-backed window contents ready");
             }
+        }
+
+        if (firstGpu > 0 && secondGpu > 0) {
+
+            // Reject ending a frame that is not open.
+            int unopened =
+                System.Australis.Gpu.EndFrame();
+
+            int begin =
+                System.Australis.Gpu.BeginFrame(0x00FF00);
+
+            int duplicate = -1;
+            int invalid = -1;
+            int firstDraw = -1;
+            int secondDraw = -1;
+            int finished = -1;
+
+            if (begin == 0) {
+                duplicate =
+                    System.Australis.Gpu.BeginFrame(0x00FF00);
+
+                invalid =
+                    System.Australis.Gpu.DrawWindow(
+                        2147483647, 0, 0);
+
+                firstDraw =
+                    System.Australis.Gpu.DrawWindow(
+                        firstGpu, 12, 16);
+
+                secondDraw =
+                    System.Australis.Gpu.DrawWindow(
+                        secondGpu, width / 3, 72);
+
+                finished =
+                    System.Australis.Gpu.EndFrame();
+            }
+
+            if (unopened != -22 ||
+                begin != 0 ||
+                duplicate != -16 ||
+                invalid != -13 ||
+                firstDraw != 0 ||
+                secondDraw != 0 ||
+                finished != 0) {
+
+                System.Console.WriteLine(
+                    "Display: GPU frame submission failed");
+
+                int released =
+                    System.Australis.Display.Release();
+
+                return 10;
+            }
+
+            System.Console.WriteLine(
+                "Display: GPU frame submission passed");
+        }
+
+        if (firstGpu > 0 && secondGpu > 0) {
+
+            System.Console.WriteLine(
+                "GPUDBG: before rounded probe");
+
+            int roundedResult = ProbeGpuRoundedDecorations(
+                firstGpu, secondGpu,
+                firstLayout, secondLayout,
+                width, height);
+
+            System.Console.Write("GPUDBG: rounded returned ");
+            System.Console.WriteLine(roundedResult);
+
+            if (roundedResult != 0) {
+                System.Console.Write(
+                    "Display: GPU rounded decorations failed: ");
+                System.Console.WriteLine(roundedResult);
+
+                int released =
+                    System.Australis.Display.Release();
+
+                return 10;
+            }
+
+            System.Console.WriteLine(
+                "Display: GPU rounded decorations passed");
+        }
+
+        if (firstGpu > 0 && secondGpu > 0) {
+
+            if (ProbeGpuFrameRects(
+                firstGpu, firstLayout,
+                width, height) != 0) {
+
+                System.Console.WriteLine(
+                    "Display: GPU frame rectangles failed");
+
+                int released =
+                    System.Australis.Display.Release();
+
+                return 10;
+            }
+
+            System.Console.WriteLine(
+                "Display: GPU frame rectangles passed");
+        }
+
+        if (firstGpu > 0 && secondGpu > 0) {
+            int decorationResult =
+                ProbeGpuDecoratedWindows(
+                    firstGpu, secondGpu,
+                    firstLayout, secondLayout,
+                    width, height);
+
+            if (decorationResult != 0) {
+                System.Console.Write(
+                    "Display: GPU decorated windows failed: ");
+                System.Console.WriteLine(decorationResult);
+
+                int released =
+                    System.Australis.Display.Release();
+
+                return 10;
+            }
+
+            System.Console.WriteLine(
+                "Display: GPU decorated windows passed");
+        }
+
+        if (firstGpu > 0 && secondGpu > 0) {
+            int gpuDesktop = ProbeGpuDesktopComposition(
+                firstGpu, secondGpu,
+                firstLayout, secondLayout,
+                width, height);
+
+            if (gpuDesktop != 0) {
+                System.Console.WriteLine(
+                    "Display: GPU desktop composition failed");
+
+                int released =
+                    System.Australis.Display.Release();
+
+                return 10;
+            }
+
+            System.Console.WriteLine(
+                "Display: GPU desktop composition passed");
         }
         byte[] clip = new byte[8];
         SetClip(clip, 0, 0, width, height);
         int cursorX = width / 2; int cursorY = height / 2;
-		System.Console.WriteLine("DBG 4: starting first frame");
 
-		int result = System.Australis.Display.BeginFrame();
+        System.Console.WriteLine(
+            "DBG: resetting instruction budget before software frame");
+
+        int preFrameSleep = System.Australis.Process.Sleep(1);
+
+        System.Console.Write("DBG: pre-frame sleep = ");
+        System.Console.WriteLine(preFrameSleep);
+
+        if (preFrameSleep != 0) {
+            int released = System.Australis.Display.Release();
+            return 6;
+        }
+
+        System.Console.WriteLine("DBG 4: starting first frame");
+
+        int result = System.Australis.Display.BeginFrame();
+
 
 		System.Console.Write("DBG BeginFrame: ");
 		System.Console.WriteLine(result);
@@ -1278,6 +1776,24 @@ public class Program {
         if (System.Australis.Process.Ready() != 0) {
             int released = System.Australis.Display.Release(); return 7;
         }
+
+        if (firstGpu > 0 && secondGpu > 0) {
+            System.Console.WriteLine(
+                "GPUVIS: starting live GPU visual test");
+
+            int visualResult = ProbeLiveGpuVisual(
+                firstGpu, secondGpu,
+                firstLayout, secondLayout);
+
+            System.Console.Write("GPUVIS: result = ");
+            System.Console.WriteLine(visualResult);
+
+            if (visualResult != 0) {
+                int released = System.Australis.Display.Release();
+                return 10;
+            }
+        }
+
         byte[] mouse = new byte[3];
         byte[] dirty = new byte[129];
         byte[] pointerEvent = new byte[7];
@@ -1297,6 +1813,8 @@ public class Program {
 		int resizeStartHeight = 0;
         int failure = 0;
         int metricsReported = 0;
+        bool gpuLiveEnabled = true;
+        int gpuLiveFrames = 0;
         int pacingWaits = 1; // Startup checks that the early frame is deferred.
         while (true) {
             if (initialMode == 0) {
@@ -1788,49 +2306,102 @@ public class Program {
                         width, height);
                 }
             }
+
             if (dirty[0] > 0) {
-                int waitCount = Flush(dirty, clip, width, height,
-                    firstState, firstCells, firstLayout, secondState,
-                    secondCells, secondLayout, focused, top,
-                    cursorX, cursorY, hardwareCursor,
-                    firstGpu, secondGpu);
-                if (waitCount < 0) {
-                    System.Console.WriteLine("Display: redraw failure");
-                    failure = 10; break;
+                int gpuFrameResult = 0;
+
+                // Try GPU rendering first.
+                if (gpuLiveEnabled) {
+                    gpuFrameResult = TryGpuLiveFrame(
+                        width, height,
+                        firstState, firstLayout, firstGpu,
+                        secondState, secondLayout, secondGpu,
+                        focused, top
+                    );
+
+                    if (gpuFrameResult < 0) {
+                        gpuLiveEnabled = false;
+
+                        System.Console.WriteLine(
+                            "Display: GPU composition failed; software fallback");
+                    }
                 }
-                pacingWaits = pacingWaits + waitCount;
-                if (metricsReported == 0) {
-                    if (System.Australis.Display.Stats(frameStats) != 20) {
-                        System.Console.WriteLine("Display: frame stats failure");
-                        failure = 14; break;
+
+                if (gpuFrameResult == 1) {
+                    // GPU has presented the complete frame.
+                    dirty[0] = 0;
+                    gpuLiveFrames = gpuLiveFrames + 1;
+
+                    if (gpuLiveFrames == 1) {
+                        System.Console.WriteLine(
+                            "Display: live GPU composition active");
                     }
-                    int submitted = Read16(frameStats, 0) +
-                        Read16(frameStats, 2) * 65536;
-                    int presented = Read16(frameStats, 4) +
-                        Read16(frameStats, 6) * 65536;
-                    int dropped = Read16(frameStats, 8) +
-                        Read16(frameStats, 10) * 65536;
-                    if (submitted != presented || dropped != 0) {
-                        System.Console.WriteLine("Display: frame count failure");
-                        failure = 14; break;
+                } else {
+                    // Restore 2D scanout before software fallback.
+                    if (System.Australis.Gpu.RestoreFrame() != 0) {
+                        System.Console.WriteLine(
+                            "Display: GPU scanout restoration failed");
+                        failure = 10;
+                        break;
                     }
-                    if (presented >= 2) {
-                        int lastMicros = Read16(frameStats, 12) +
-                            Read16(frameStats, 14) * 65536;
-                        int maxMicros = Read16(frameStats, 16) +
-                            Read16(frameStats, 18) * 65536;
-                        System.Console.Write("Display: paced frames=");
-                        System.Console.Write(presented);
-                        System.Console.Write(" last_us=");
-                        System.Console.Write(lastMicros);
-                        System.Console.Write(" max_us=");
-                        System.Console.Write(maxMicros);
-                        System.Console.Write(" waits=");
-                        System.Console.WriteLine(pacingWaits);
-                        metricsReported = 1;
+
+                    // Original software rendering path.
+                    int waitCount = Flush(dirty, clip, width, height,
+                        firstState, firstCells, firstLayout, secondState,
+                        secondCells, secondLayout, focused, top,
+                        cursorX, cursorY, hardwareCursor,
+                        firstGpu, secondGpu);
+
+                    if (waitCount < 0) {
+                        System.Console.WriteLine("Display: redraw failure");
+                        failure = 10;
+                        break;
+                    }
+
+                    pacingWaits = pacingWaits + waitCount;
+
+                    // Existing software frame statistics.
+                    if (metricsReported == 0) {
+                        if (System.Australis.Display.Stats(frameStats) != 20) {
+                            System.Console.WriteLine("Display: frame stats failure");
+                            failure = 14;
+                            break;
+                        }
+
+                        int submitted = Read16(frameStats, 0) +
+                            Read16(frameStats, 2) * 65536;
+                        int presented = Read16(frameStats, 4) +
+                            Read16(frameStats, 6) * 65536;
+                        int dropped = Read16(frameStats, 8) +
+                            Read16(frameStats, 10) * 65536;
+
+                        if (submitted != presented || dropped != 0) {
+                            System.Console.WriteLine("Display: frame count failure");
+                            failure = 14;
+                            break;
+                        }
+
+                        if (presented >= 2) {
+                            int lastMicros = Read16(frameStats, 12) +
+                                Read16(frameStats, 14) * 65536;
+                            int maxMicros = Read16(frameStats, 16) +
+                                Read16(frameStats, 18) * 65536;
+
+                            System.Console.Write("Display: paced frames=");
+                            System.Console.Write(presented);
+                            System.Console.Write(" last_us=");
+                            System.Console.Write(lastMicros);
+                            System.Console.Write(" max_us=");
+                            System.Console.Write(maxMicros);
+                            System.Console.Write(" waits=");
+                            System.Console.WriteLine(pacingWaits);
+
+                            metricsReported = 1;
+                        }
                     }
                 }
             }
+
             if (focused > 0) {
                 int keys = 0;
                 while (keys < 8) {
@@ -1878,4 +2449,703 @@ public class Program {
         if (released != 0 && failure == 0) { failure = 13; }
         return failure;
     }
+
+    private static bool NearGpuRgb(int actual, int expected) {
+        if (actual < 0 || expected < 0) {
+            return false;
+        }
+
+        int r = actual / 65536 % 256 -
+            expected / 65536 % 256;
+        int g = actual / 256 % 256 -
+            expected / 256 % 256;
+        int b = actual % 256 - expected % 256;
+
+        if (r < 0) { r = 0 - r; }
+        if (g < 0) { g = 0 - g; }
+        if (b < 0) { b = 0 - b; }
+
+        return r <= 8 && g <= 8 && b <= 8;
+    }
+
+    private static int ProbeGpuFrameRects(
+        int handle, byte[] layout,
+        int width, int height) {
+
+        int x = Read16(layout, 0) + 8;
+        int y = ContentTop(layout);
+
+        if (handle < 1 ||
+            x < 0 || y < 0 ||
+            x + 32 > width ||
+            y + 32 > height) {
+            return -22;
+        }
+
+        // No active GPU frame.
+        if (System.Australis.Gpu.FillFrameRect(
+            2, 2, 12, 12, 0x4488CC) != -22) {
+            return -5;
+        }
+
+        if (System.Australis.Gpu.BeginFrame(
+            0x26384F) != 0) {
+            return -5;
+        }
+
+        // Invalid rectangle must not corrupt the frame.
+        int invalid =
+            System.Australis.Gpu.FillFrameRect(
+                width - 4, 0, 8, 8, 0xFFFFFF);
+
+        // Background decoration.
+        int background =
+            System.Australis.Gpu.FillFrameRect(
+                2, 2, 12, 12, 0x4488CC);
+
+        // Actual application window texture.
+        int window =
+            System.Australis.Gpu.DrawWindow(
+                handle, x, y);
+
+        // Foreground decoration above the window.
+        int foreground =
+            System.Australis.Gpu.FillFrameRect(
+                x + 4, y + 4, 8, 8, 0xAA4400);
+
+        int end =
+            System.Australis.Gpu.EndFrame();
+
+        if (invalid != -22 ||
+            background != 0 ||
+            window != 0 ||
+            foreground != 0 ||
+            end != 0) {
+            return -5;
+        }
+
+        int originalPixel =
+            System.Australis.Gpu.ReadPixel(handle, 20, 20);
+
+        if (!NearGpuRgb(
+                System.Australis.Gpu.FramePixel(1, 1),
+                0x26384F) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(5, 5),
+                0x4488CC) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    x + 6, y + 6),
+                0xAA4400) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    x + 20, y + 20),
+                originalPixel)) {
+            return -5;
+        }
+
+        return 0;
+    }
+
+    private static int ProbeGpuDesktopComposition(
+        int firstGpu, int secondGpu,
+        byte[] firstLayout, byte[] secondLayout,
+        int width, int height) {
+
+        // Actual window-content positions on the desktop.
+        int ax = Read16(firstLayout, 0) + 8;
+        int ay = ContentTop(firstLayout);
+        int bx = Read16(secondLayout, 0) + 8;
+        int by = ContentTop(secondLayout);
+
+        int aw = ContentWidth(firstLayout);
+        int ah = ContentHeight(firstLayout);
+        int bw = ContentWidth(secondLayout);
+        int bh = ContentHeight(secondLayout);
+
+        // A pixel inside both windows.
+        int overlapX = bx + 8;
+        int overlapY = by + 8;
+
+        if (firstGpu < 1 || secondGpu < 1 ||
+            aw < 16 || ah < 16 ||
+            bw < 16 || bh < 16 ||
+            ax < 0 || ay < 0 ||
+            bx < 0 || by < 0 ||
+            ax + aw > width || ay + ah > height ||
+            bx + bw > width || by + bh > height ||
+            overlapX < ax || overlapX >= ax + aw ||
+            overlapY < ay || overlapY >= ay + ah) {
+            return -22;
+        }
+
+        int firstColor =
+            System.Australis.Gpu.ReadPixel(firstGpu, 8, 8);
+
+        int secondColor =
+            System.Australis.Gpu.ReadPixel(
+                secondGpu, bw - 8, 8);
+
+        int overlapFirst =
+            System.Australis.Gpu.ReadPixel(
+                firstGpu, overlapX - ax, overlapY - ay);
+
+        int overlapSecond =
+            System.Australis.Gpu.ReadPixel(secondGpu, 8, 8);
+
+        if (firstColor < 0 || secondColor < 0 ||
+            overlapFirst < 0 || overlapSecond < 0 ||
+            NearGpuRgb(overlapFirst, overlapSecond)) {
+            return -5;
+        }
+
+        // Frame A: first window behind second window.
+        if (System.Australis.Gpu.BeginFrame(0x00FF00) != 0 ||
+            System.Australis.Gpu.DrawWindow(
+                firstGpu, ax, ay) != 0 ||
+            System.Australis.Gpu.DrawWindow(
+                secondGpu, bx, by) != 0 ||
+            System.Australis.Gpu.EndFrame() != 0) {
+            return -5;
+        }
+
+        if (!NearGpuRgb(
+                System.Australis.Gpu.FramePixel(2, 2),
+                0x00FF00) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(ax + 8, ay + 8),
+                firstColor) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    bx + bw - 8, by + 8),
+                secondColor) ||
+            !NearGpuRgb(
+                System.Australis.Gpu.FramePixel(
+                    overlapX, overlapY),
+                overlapSecond)) {
+            return -5;
+        }
+
+        // Frame B: reverse the stacking order.
+        if (System.Australis.Gpu.BeginFrame(0x00FF00) != 0 ||
+            System.Australis.Gpu.DrawWindow(
+                secondGpu, bx, by) != 0 ||
+            System.Australis.Gpu.DrawWindow(
+                firstGpu, ax, ay) != 0 ||
+            System.Australis.Gpu.EndFrame() != 0) {
+            return -5;
+        }
+
+        // The overlapping pixel must now belong to A.
+        if (!NearGpuRgb(
+            System.Australis.Gpu.FramePixel(
+                overlapX, overlapY),
+            overlapFirst)) {
+            return -5;
+        }
+
+        return 0;
+    }
+
+    private static int ProbeGpuBatchColours() {
+        // First test: one rectangle, flushed at EndFrame.
+        if (System.Australis.Gpu.BeginFrame(0x26384F) != 0) {
+            return -71;
+        }
+
+        int singleDraw = System.Australis.Gpu.FillFrameRect(
+            32, 48, 8, 8, 0xE5E8ED);
+
+        int singleEnd = System.Australis.Gpu.EndFrame();
+
+        if (singleDraw != 0 || singleEnd != 0) {
+            return -72;
+        }
+
+        int single = System.Australis.Gpu.FramePixel(32, 48);
+
+        System.Console.Write("GPUDBG: single titlebar = ");
+        System.Console.WriteLine(single);
+
+        if (!NearGpuRgb(single, 0xE5E8ED)) {
+            return -73;
+        }
+
+        // Second test: four rectangles in one batch.
+        if (System.Australis.Gpu.BeginFrame(0x26384F) != 0) {
+            return -74;
+        }
+
+        int a = System.Australis.Gpu.FillFrameRect(
+            32, 48, 8, 8, 0xE5E8ED);
+        int b = System.Australis.Gpu.FillFrameRect(
+            48, 48, 8, 8, 0xFF5F57);
+        int c = System.Australis.Gpu.FillFrameRect(
+            64, 48, 8, 8, 0xFEBC2E);
+        int d = System.Australis.Gpu.FillFrameRect(
+            80, 48, 8, 8, 0x28C840);
+
+        int end = System.Australis.Gpu.EndFrame();
+
+        if (a != 0 || b != 0 || c != 0 ||
+            d != 0 || end != 0) {
+            return -75;
+        }
+
+        int pa = System.Australis.Gpu.FramePixel(32, 48);
+        int pb = System.Australis.Gpu.FramePixel(48, 48);
+        int pc = System.Australis.Gpu.FramePixel(64, 48);
+        int pd = System.Australis.Gpu.FramePixel(80, 48);
+
+        System.Console.Write("GPUDBG: batch titlebar = ");
+        System.Console.WriteLine(pa);
+        System.Console.Write("GPUDBG: batch close = ");
+        System.Console.WriteLine(pb);
+        System.Console.Write("GPUDBG: batch minimise = ");
+        System.Console.WriteLine(pc);
+        System.Console.Write("GPUDBG: batch maximise = ");
+        System.Console.WriteLine(pd);
+
+        if (!NearGpuRgb(pa, 0xE5E8ED) ||
+            !NearGpuRgb(pb, 0xFF5F57) ||
+            !NearGpuRgb(pc, 0xFEBC2E) ||
+            !NearGpuRgb(pd, 0x28C840)) {
+            return -76;
+        }
+
+        return 0;
+    }
+
+    private static int TryGpuLiveFrame(
+        int width, int height,
+        byte[] firstState, byte[] firstLayout, int firstGpu,
+        byte[] secondState, byte[] secondLayout, int secondGpu,
+        int focused, int top) {
+
+        // First milestone: two normal, GPU-backed windows.
+        // Unsupported states use the software renderer.
+        if (firstGpu < 1 || secondGpu < 1 ||
+            firstLayout[9] == 1 || secondLayout[9] == 1) {
+            return 0;
+        }
+
+        // Single-render-target implementation:
+        // restore 2D before drawing into the GPU target again.
+        if (System.Australis.Gpu.RestoreFrame() != 0) {
+            return -1;
+        }
+
+        if (System.Australis.Process.Sleep(1) != 0) {
+            return -1;
+        }
+
+        if (System.Australis.Gpu.BeginFrame(0x26384F) != 0) {
+            return -1;
+        }
+
+        int result = 0;
+
+        if (top == 1) {
+            // Window A is above window B.
+            if (Visible(secondState, secondLayout)) {
+                result = GpuDrawRoundedWindow(
+                    secondLayout, secondGpu, focused == 2);
+            }
+
+            if (result != 0) { return -1; }
+
+            if (System.Australis.Process.Sleep(1) != 0) {
+                return -1;
+            }
+
+            if (Visible(firstState, firstLayout)) {
+                result = GpuDrawRoundedWindow(
+                    firstLayout, firstGpu, focused == 1);
+            }
+        } else {
+            // Window B is above window A.
+            if (Visible(firstState, firstLayout)) {
+                result = GpuDrawRoundedWindow(
+                    firstLayout, firstGpu, focused == 1);
+            }
+
+            if (result != 0) { return -1; }
+
+            if (System.Australis.Process.Sleep(1) != 0) {
+                return -1;
+            }
+
+            if (Visible(secondState, secondLayout)) {
+                result = GpuDrawRoundedWindow(
+                    secondLayout, secondGpu, focused == 2);
+            }
+        }
+
+        if (result != 0) { return -1; }
+
+        // Match the normal desktop topbar.
+        if (System.Australis.Gpu.FillFrameRect(
+            0, 0, width, TopbarHeight(), 0x111820) != 0) {
+            return -1;
+        }
+
+        if (System.Australis.Process.Sleep(1) != 0) {
+            return -1;
+        }
+
+        if (System.Australis.Gpu.EndFrame() != 0) {
+            return -1;
+        }
+
+        if (System.Australis.Gpu.PresentFrame() != 0) {
+            return -1;
+        }
+
+        return 1;
+    }
+
+    private static int ProbeGpuRoundedDecorations(
+        int firstGpu, int secondGpu,
+        byte[] firstLayout, byte[] secondLayout,
+        int width, int height) {
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 1 - entered");
+
+        if (firstGpu < 1 || secondGpu < 1) {
+            return -22;
+        }
+
+        if (firstLayout.Length < 19 || secondLayout.Length < 19) {
+            return -22;
+        }
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 2 - layouts valid");
+
+        if (firstLayout[9] != 0 || secondLayout[9] != 0) {
+            return -22;
+        }
+
+        int ax = Read16(firstLayout, 0);
+        int ay = Read16(firstLayout, 2);
+        int bx = Read16(secondLayout, 0);
+        int by = Read16(secondLayout, 2);
+        int bw = Read16(secondLayout, 4);
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 3 - coordinates read");
+
+        int topA = ContentTop(firstLayout);
+        int topB = ContentTop(secondLayout);
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 4 - content tops");
+
+        int overlapX = bx + 16;
+        int overlapY = topB + 16;
+
+        int firstLocalX = overlapX - ax - 8;
+        int firstLocalY = overlapY - topA;
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 5 - overlap calculated");
+
+        int contentWidthA = ContentWidth(firstLayout);
+        int contentHeightA = ContentHeight(firstLayout);
+
+        if (firstLocalX < 0 || firstLocalY < 0 ||
+            firstLocalX >= contentWidthA ||
+            firstLocalY >= contentHeightA) {
+            return -22;
+        }
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 6 - geometry valid");
+
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 7 - reading texture A");
+
+        int colorA = System.Australis.Gpu.ReadPixel(firstGpu, firstLocalX, firstLocalY);
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 8 - texture A returned");
+
+        System.Console.Write("GPUDBG: colorA = ");
+        System.Console.WriteLine(colorA);
+
+        if (colorA < 0) {
+            return -61;
+        }
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 9 - reading texture B");
+
+        int colorB = System.Australis.Gpu.ReadPixel(secondGpu, 16, 16);
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 10 - texture B returned");
+
+        System.Console.Write("GPUDBG: colorB = ");
+        System.Console.WriteLine(colorB);
+
+        if (colorB < 0) {
+            return -62;
+        }
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 11 - comparing colours");
+
+        if (NearGpuRgb(colorA, colorB)) {
+            return -63;
+        }
+
+        System.Console.WriteLine("GPUDBG: rounded STEP 12 - source pixels valid");
+
+        // B above A.
+        if (System.Australis.Gpu.BeginFrame(0x26384F) != 0 ||
+            GpuDrawRoundedWindow(firstLayout, firstGpu, false) != 0 ||
+            GpuDrawRoundedWindow(secondLayout, secondGpu, true) != 0 ||
+            System.Australis.Gpu.EndFrame() != 0) {
+            return -52;
+        }
+
+        int size = TitlebarControlSize();
+        int controlAY = ControlY(ay, TitlebarHeight());
+        int controlBY = ControlY(by, TitlebarHeight());
+
+
+        if (!CheckRoundedPixel("A top-left rounded corner", ax, ay, 0x26384F) ||
+            !CheckRoundedPixel("B top-right rounded corner", bx + bw - 1, by, 0x26384F) ||
+            !CheckRoundedPixel("A titlebar", ax + WindowRadius(), ay, UnfocusedTitlebar()) ||
+            !CheckRoundedPixel("A close control", ControlX(ax, 0) + size / 2, controlAY + size / 2, 0xFF5F57) ||
+            !CheckRoundedPixel("B close control", ControlX(bx, 0) + size / 2, controlBY + size / 2, 0xFF5F57) ||
+            !CheckRoundedPixel("B minimise control", ControlX(bx, 1) + size / 2, controlBY + size / 2, 0xFEBC2E) ||
+            !CheckRoundedPixel("B maximise control", ControlX(bx, 2) + size / 2, controlBY + size / 2, 0x28C840) ||
+            !CheckRoundedPixel("B window content overlap", overlapX, overlapY, colorB)) {
+
+            return -53;
+        }
+
+        System.Console.WriteLine("GPUDBG: STEP 13");
+
+        // Reverse stacking: A above B.
+
+        System.Console.WriteLine("GPUDBG: frame 2 starting");
+
+        System.Console.WriteLine(
+            "GPUDBG: pausing before frame 2");
+
+        int pauseResult = System.Australis.Process.Sleep(1);
+
+        System.Console.Write("GPUDBG: pause result = ");
+        System.Console.WriteLine(pauseResult);
+
+        if (pauseResult != 0) {
+            return -540;
+        }
+
+        // Existing frame 2 code continues here.
+        System.Console.WriteLine("GPUDBG: frame 2 starting");
+
+        int begin2 = System.Australis.Gpu.BeginFrame(0x26384F);
+        System.Console.Write("GPUDBG: frame 2 BeginFrame = ");
+        System.Console.WriteLine(begin2);
+        if (begin2 != 0) {
+            return -541;
+        }
+
+        System.Console.WriteLine("GPUDBG: frame 2 drawing B");
+        int drawB2 = GpuDrawRoundedWindow(
+            secondLayout, secondGpu, false);
+
+        System.Console.Write("GPUDBG: frame 2 DrawB = ");
+        System.Console.WriteLine(drawB2);
+        if (drawB2 != 0) {
+            return -542;
+        }
+
+        System.Console.WriteLine("GPUDBG: frame 2 drawing A");
+        int drawA2 = GpuDrawRoundedWindow(
+            firstLayout, firstGpu, true);
+
+        System.Console.Write("GPUDBG: frame 2 DrawA = ");
+        System.Console.WriteLine(drawA2);
+        if (drawA2 != 0) {
+            return -543;
+        }
+
+        System.Console.WriteLine("GPUDBG: frame 2 ending");
+        int end2 = System.Australis.Gpu.EndFrame();
+
+        System.Console.Write("GPUDBG: frame 2 EndFrame = ");
+        System.Console.WriteLine(end2);
+        if (end2 != 0) {
+            return -544;
+        }
+
+        System.Console.WriteLine(
+            "GPUDBG: rounded frame 2 rendered");
+
+
+        System.Console.WriteLine("GPUDBG: STEP 14");
+
+        if (!NearGpuRgb(
+            System.Australis.Gpu.FramePixel(overlapX, overlapY), colorA)) {
+            return -55;
+        }
+
+        System.Console.WriteLine("GPUDBG: STEP 15");
+
+        System.Console.WriteLine("GPUDBG: selecting live GPU scanout");
+
+        int liveResult = System.Australis.Gpu.PresentFrame();
+
+        System.Console.Write("GPUDBG: live presentation = ");
+        System.Console.WriteLine(liveResult);
+
+        if (liveResult != 0) {
+            return -81;
+        }
+
+        System.Console.WriteLine("GPUDBG: restoring software scanout");
+
+        int restoreResult = System.Australis.Gpu.RestoreFrame();
+
+        System.Console.Write("GPUDBG: scanout restore = ");
+        System.Console.WriteLine(restoreResult);
+
+        if (restoreResult != 0) {
+            return -82;
+        }
+
+        System.Console.WriteLine(
+            "Display: live GPU presentation round-trip passed");
+
+        return 0;
+    }
+
+    private static bool CheckRoundedPixel(
+        string name, int x, int y, int expected) {
+
+        int actual =
+            System.Australis.Gpu.FramePixel(x, y);
+
+        if (NearGpuRgb(actual, expected)) {
+            return true;
+        }
+
+        System.Console.Write("GPUDBG: FAILED ");
+        System.Console.WriteLine(name);
+
+        System.Console.Write("GPUDBG: position ");
+        System.Console.Write(x);
+        System.Console.Write(", ");
+        System.Console.WriteLine(y);
+
+        System.Console.Write("GPUDBG: expected ");
+        System.Console.WriteLine(expected);
+
+        System.Console.Write("GPUDBG: actual ");
+        System.Console.WriteLine(actual);
+
+        return false;
+    }
+
+    private static bool CheckGpuProbePixel(
+        string label, int x, int y, int expected) {
+
+        int actual =
+            System.Australis.Gpu.FramePixel(x, y);
+
+        if (NearGpuRgb(actual, expected)) {
+            return true;
+        }
+
+        System.Console.Write("GPUDBG: pixel failed: ");
+        System.Console.WriteLine(label);
+
+        System.Console.Write(" expected RGB: ");
+        System.Console.WriteLine(expected);
+
+        System.Console.Write(" actual RGB: ");
+        System.Console.WriteLine(actual);
+
+        System.Console.Write(" coordinates: ");
+        System.Console.Write(x);
+        System.Console.Write(", ");
+        System.Console.WriteLine(y);
+
+        return false;
+    }
+
+    private static int ProbeLiveGpuVisual(
+        int firstGpu, int secondGpu,
+        byte[] firstLayout, byte[] secondLayout) {
+
+        if (firstGpu < 1 || secondGpu < 1) {
+            return -95;
+        }
+
+        // Reset the AUEX instruction watchdog.
+        if (System.Australis.Process.Sleep(1) != 0) {
+            return -1;
+        }
+
+        int result =
+            System.Australis.Gpu.BeginFrame(0x26384F);
+
+        if (result != 0) {
+            return -2;
+        }
+
+        // A below B.
+        result = GpuDrawRoundedWindow(
+            firstLayout, firstGpu, false);
+
+        if (result != 0) {
+            return -3;
+        }
+
+        if (System.Australis.Process.Sleep(1) != 0) {
+            return -4;
+        }
+
+        result = GpuDrawRoundedWindow(
+            secondLayout, secondGpu, true);
+
+        if (result != 0) {
+            return -5;
+        }
+
+        if (System.Australis.Process.Sleep(1) != 0) {
+            return -6;
+        }
+
+        result = System.Australis.Gpu.EndFrame();
+
+        if (result != 0) {
+            return -7;
+        }
+
+        result = System.Australis.Gpu.PresentFrame();
+
+        if (result != 0) {
+            System.Console.WriteLine("GPUVIS: PRESENT FAILED");
+            return -8;
+        }
+
+        // Screenshot synchronisation marker.
+        System.Console.WriteLine("GPUVIS: PRESENTED");
+
+        // Safe here because Display has announced readiness.
+        int hold = System.Australis.Process.Sleep(3000);
+
+        // Always attempt restoration after presentation.
+        int restored = System.Australis.Gpu.RestoreFrame();
+
+        if (restored != 0) {
+            System.Console.WriteLine("GPUVIS: RESTORE FAILED");
+            return -9;
+        }
+
+        System.Console.WriteLine("GPUVIS: RESTORED");
+
+        if (hold != 0) {
+            return -10;
+        }
+
+        return 0;
+    }
+
 }
