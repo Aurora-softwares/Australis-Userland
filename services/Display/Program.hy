@@ -247,7 +247,21 @@ public class Program {
 
 	private static int RoundedBand(int x, int y, int width, int height, int firstRow, int lastRow, int radius, int color, byte[] clip) {
 		int row = firstRow;
+		int endRow = lastRow;
+		int clipTop = Read16(clip, 2);
+		int clipBottom = clipTop + Read16(clip, 6);
 
+		if (row < clipTop - y) {
+			row = clipTop - y;
+		}
+
+		if (endRow > clipBottom - y) {
+			endRow = clipBottom - y;
+		}
+
+		if (row >= endRow) {
+			return 0;
+		}
 		while (row < lastRow) {
 			if (row >= radius && row < height - radius) {
 				int end = lastRow;
@@ -895,13 +909,64 @@ public class Program {
         return 0;
     }
 
+	private static bool WindowCoversClip(byte[] layout, byte[] clip) {
+		int x = Read16(layout, 0);
+		int y = Read16(layout, 2);
+		int width = Read16(layout, 4);
+		int height = Read16(layout, 6);
+
+		int clipX = Read16(clip, 0);
+		int clipY = Read16(clip, 2);
+		int clipRight = clipX + Read16(clip, 4);
+		int clipBottom = clipY + Read16(clip, 6);
+
+		// The entire damaged region must be inside this window.
+		if (clipX < x || clipY < y ||
+			clipRight > x + width ||
+			clipBottom > y + height) {
+			return false;
+		}
+
+		// Maximised windows are rectangular.
+		if (layout[9] == 1) {
+			return true;
+		}
+
+		// Account for the rounded corners.
+		int radius = WindowRadius();
+
+		int inset = RoundedInset(
+			clipY - y, width, height, radius
+		);
+
+		int bottomInset = RoundedInset(
+			clipBottom - y - 1, width, height, radius
+		);
+
+		if (bottomInset > inset) {
+			inset = bottomInset;
+		}
+
+		return clipX >= x + inset &&
+			clipRight <= x + width - inset;
+	}
+
     private static int Compose(int width, int height, byte[] firstState, byte[] firstCells, byte[] firstLayout, byte[] secondState, byte[] secondCells, byte[] secondLayout, byte[] clip, int focused, int top, int firstGpu, int secondGpu) {
-		if (Clip(0, 0, width, height, 0x26384F, clip) != 0) { return -5; }
-        if (top == 1) {
-            if (Visible(secondState, secondLayout) && DrawWindow(secondLayout, secondCells, clip, focused == 2, secondGpu) != 0) { return -5; }
-            if (Visible(firstState, firstLayout) && DrawWindow(firstLayout, firstCells, clip, focused == 1, firstGpu) != 0) { return -5; }
-		} else {
-			System.Console.WriteLine("DBG: drawing first window");
+		if (Clip(0, 0, width, height, 0x26384F, clip) != 0) {
+			return -5;
+		}
+
+		if (top == 1) {
+			// First window is on top.
+			bool covered = Visible(firstState, firstLayout) &&
+				WindowCoversClip(firstLayout, clip);
+
+			// Draw the rear window only if some of it is visible.
+			if (!covered && Visible(secondState, secondLayout) &&
+				DrawWindow(secondLayout, secondCells, clip,
+					focused == 2, secondGpu) != 0) {
+				return -5;
+			}
 
 			if (Visible(firstState, firstLayout) &&
 				DrawWindow(firstLayout, firstCells, clip,
@@ -909,24 +974,20 @@ public class Program {
 				return -5;
 			}
 
-			System.Console.WriteLine("DBG: first window finished");
+		} else {
+			// Second window is on top.
+			bool covered = Visible(secondState, secondLayout) &&
+				WindowCoversClip(secondLayout, clip);
 
-			// Yield to the scheduler and reset the instruction watchdog.
-			if (System.Australis.Process.Sleep(1) != 0) {
+			if (!covered && Visible(firstState, firstLayout) &&
+				DrawWindow(firstLayout, firstCells, clip,
+					focused == 1, firstGpu) != 0) {
 				return -5;
 			}
-
-			System.Console.WriteLine("DBG: drawing second window");
 
 			if (Visible(secondState, secondLayout) &&
 				DrawWindow(secondLayout, secondCells, clip,
 					focused == 2, secondGpu) != 0) {
-				return -5;
-			}
-
-			System.Console.WriteLine("DBG: second window finished");
-
-			if (System.Australis.Process.Sleep(1) != 0) {
 				return -5;
 			}
 		}
