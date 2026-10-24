@@ -833,13 +833,27 @@ public class Program {
 			if (RoundedBand(x, y, width, height, 0, height, WindowRadius(), WindowBackground(), clip) != 0) {
 				return -5;
 			}
+
 			System.Console.WriteLine("DBG: window background complete");
+
+			// Allow the scheduler to run between drawing stages.
+			if (System.Australis.Process.Sleep(1) != 0) {
+				return -5;
+			}
+
 			if (RoundedBand(x, y, width, height, 0, TitlebarHeight(), WindowRadius(), header, clip) != 0) {
 				return -5;
 			}
+
+			// Reset the instruction watchdog before drawing controls.
+			if (System.Australis.Process.Sleep(1) != 0) {
+				return -5;
+			}
+
 			if (DrawControls(x, y, TitlebarHeight(), layout, clip) != 0) {
 				return -5;
 			}
+
 		}
         int clipX = Read16(clip, 0);
         int clipY = Read16(clip, 2);
@@ -884,42 +898,38 @@ public class Program {
     private static int Compose(int width, int height, byte[] firstState, byte[] firstCells, byte[] firstLayout, byte[] secondState, byte[] secondCells, byte[] secondLayout, byte[] clip, int focused, int top, int firstGpu, int secondGpu) {
 		if (Clip(0, 0, width, height, 0x26384F, clip) != 0) { return -5; }
         if (top == 1) {
-            if (Visible(secondState, secondLayout) &&
-                DrawWindow(secondLayout, secondCells, clip,
-                    focused == 2, secondGpu) != 0) { return -5; }
-            if (Visible(firstState, firstLayout) &&
-                DrawWindow(firstLayout, firstCells, clip,
-                    focused == 1, firstGpu) != 0) { return -5; }
-			} else {
-				System.Console.WriteLine("DBG: drawing first window");
+            if (Visible(secondState, secondLayout) && DrawWindow(secondLayout, secondCells, clip, focused == 2, secondGpu) != 0) { return -5; }
+            if (Visible(firstState, firstLayout) && DrawWindow(firstLayout, firstCells, clip, focused == 1, firstGpu) != 0) { return -5; }
+		} else {
+			System.Console.WriteLine("DBG: drawing first window");
 
-				if (Visible(firstState, firstLayout) &&
-					DrawWindow(firstLayout, firstCells, clip,
-						focused == 1, firstGpu) != 0) {
-					return -5;
-				}
-
-				System.Console.WriteLine("DBG: first window finished");
-
-				// Yield to the scheduler and reset the instruction watchdog.
-				if (System.Australis.Process.Sleep(1) != 0) {
-					return -5;
-				}
-
-				System.Console.WriteLine("DBG: drawing second window");
-
-				if (Visible(secondState, secondLayout) &&
-					DrawWindow(secondLayout, secondCells, clip,
-						focused == 2, secondGpu) != 0) {
-					return -5;
-				}
-
-				System.Console.WriteLine("DBG: second window finished");
-
-				if (System.Australis.Process.Sleep(1) != 0) {
-					return -5;
-				}
+			if (Visible(firstState, firstLayout) &&
+				DrawWindow(firstLayout, firstCells, clip,
+					focused == 1, firstGpu) != 0) {
+				return -5;
 			}
+
+			System.Console.WriteLine("DBG: first window finished");
+
+			// Yield to the scheduler and reset the instruction watchdog.
+			if (System.Australis.Process.Sleep(1) != 0) {
+				return -5;
+			}
+
+			System.Console.WriteLine("DBG: drawing second window");
+
+			if (Visible(secondState, secondLayout) &&
+				DrawWindow(secondLayout, secondCells, clip,
+					focused == 2, secondGpu) != 0) {
+				return -5;
+			}
+
+			System.Console.WriteLine("DBG: second window finished");
+
+			if (System.Australis.Process.Sleep(1) != 0) {
+				return -5;
+			}
+		}
         int maxId = 0;
         if (top == 1 && Visible(firstState, firstLayout) &&
             firstLayout[9] == 1) { maxId = 1; }
@@ -1229,6 +1239,35 @@ public class Program {
                 Read16(layout, 4), TitlebarHeight(), width, height);
         }
     }
+	private static void ControlDamage(
+		byte[] dirty, byte[] layout, int control,
+		int width, int height) {
+
+		if (layout[8] == 0 || control < 1 || control > 3) {
+			return;
+		}
+
+		int x = Read16(layout, 0);
+		int y = Read16(layout, 2);
+		int barHeight = TitlebarHeight();
+
+		if (layout[9] == 1) {
+			x = 0;
+			y = 0;
+			barHeight = TopbarHeight();
+		}
+
+		int padding = 2;
+
+		Damage(
+			dirty,
+			ControlX(x, control - 1) - padding,
+			ControlY(y, barHeight) - padding,
+			TitlebarControlSize() + padding * 2,
+			TitlebarControlSize() + padding * 2,
+			width, height
+		);
+	}
     private static int MenuHit(int x, int y, int width,
         byte[] firstState, byte[] secondState) {
         if (y < 8 || y >= 24) { return 0; }
@@ -1356,13 +1395,25 @@ public class Program {
             int x = dirty[offset] + dirty[offset + 1] * 256;
             int y = dirty[offset + 2] + dirty[offset + 3] * 256;
             int rectWidth = dirty[offset + 4] + dirty[offset + 5] * 256;
-            int rectHeight = dirty[offset + 6] + dirty[offset + 7] * 256;
-            SetClip(clip, x, y, rectWidth, rectHeight);
+			int rectHeight = dirty[offset + 6] + dirty[offset + 7] * 256;
+
+			System.Console.Write("PERF: dirty x=");
+			System.Console.Write(x);
+			System.Console.Write(" y=");
+			System.Console.Write(y);
+			System.Console.Write(" w=");
+			System.Console.Write(rectWidth);
+			System.Console.Write(" h=");
+			System.Console.WriteLine(rectHeight);
+
+			SetClip(clip, x, y, rectWidth, rectHeight);
+			System.Console.WriteLine("PERF: compose START");
             if (Compose(width, height, firstState, firstCells,
                 firstLayout, secondState, secondCells, secondLayout,
                 clip, focused, top, firstGpu, secondGpu) != 0) {
                 return -5;
             }
+			System.Console.WriteLine("PERF: compose END");
             if (!hardwareCursor && x < cursorX + 14 &&
                 x + rectWidth > cursorX &&
                 y < cursorY + 20 && y + rectHeight > cursorY &&
@@ -1461,11 +1512,17 @@ public class Program {
         } else if (gpuHandle != -19) {
             int released = System.Australis.Display.Release(); return 10;
         }
-        int initialMode = System.Australis.Display.SetMode(width, height);
-        if (initialMode != -95 && initialMode != 0) {
-            int released = System.Australis.Display.Release(); return 8;
-        }
-        bool hardwareCursor = System.Australis.SystemInfo.Query(29) / 4 % 2 == 1;
+		int initialMode = System.Australis.Display.SetMode(width, height);
+
+		if (initialMode != -95 && initialMode != 0) {
+			int released = System.Australis.Display.Release();
+			return 8;
+		}
+
+		// GOP does not support the VirtIO-GPU scanout restoration API.
+		bool gpuScanoutSupported = initialMode == 0;
+
+		bool hardwareCursor = System.Australis.SystemInfo.Query(29) / 4 % 2 == 1;
         if (CheckBuffers(width, height) != 0) {
             int released = System.Australis.Display.Release(); return 9;
         }
@@ -1722,8 +1779,9 @@ public class Program {
 
         System.Console.WriteLine("DBG 4: starting first frame");
 
+		System.Console.WriteLine("PERF: present START");
         int result = System.Australis.Display.BeginFrame();
-
+		System.Console.WriteLine("PERF: present END");
 
 		System.Console.Write("DBG BeginFrame: ");
 		System.Console.WriteLine(result);
@@ -1813,7 +1871,7 @@ public class Program {
 		int resizeStartHeight = 0;
         int failure = 0;
         int metricsReported = 0;
-        bool gpuLiveEnabled = true;
+        bool gpuLiveEnabled = gpuScanoutSupported;
         int gpuLiveFrames = 0;
         int pacingWaits = 1; // Startup checks that the early frame is deferred.
         while (true) {
@@ -2264,17 +2322,15 @@ public class Program {
                             secondCells);
                     }
                 }
-                DamageTransition(dirty, beforeSecond, secondLayout,
-                    width, height);
+                DamageTransition(dirty, beforeSecond, secondLayout, width, height);
                 if (beforeSecond[9] != secondLayout[9]) {
                     Damage(dirty, 0, 0, width, 32, width, height);
                 }
             }
-            if (beforeTop != top) {
-                DamageOverlap(dirty, firstLayout, secondLayout,
-                    width, height);
-                Damage(dirty, 0, 0, width, 32, width, height);
-            }
+			if (beforeTop != top) {
+				DamageOverlap(dirty, firstLayout, secondLayout, width, height);
+				Damage(dirty, 0, 0, width, 32, width, height);
+			}
             if (beforeFocus != focused) {
                 if (beforeFocus == 1) {
                     HeaderDamage(dirty, beforeFirst, width, height);
@@ -2289,12 +2345,15 @@ public class Program {
                     HeaderDamage(dirty, secondLayout, width, height);
                 }
             }
-            if (beforeFirst[18] != firstLayout[18]) {
-                HeaderDamage(dirty, firstLayout, width, height);
-            }
-            if (beforeSecond[18] != secondLayout[18]) {
-                HeaderDamage(dirty, secondLayout, width, height);
-            }
+			if (beforeFirst[18] != firstLayout[18]) {
+				ControlDamage(dirty, beforeFirst, beforeFirst[18], width, height);
+				ControlDamage(dirty, firstLayout, firstLayout[18], width, height);
+			}
+
+			if (beforeSecond[18] != secondLayout[18]) {
+				ControlDamage(dirty, beforeSecond, beforeSecond[18], width, height);
+				ControlDamage(dirty, secondLayout, secondLayout[18], width, height);
+			}
             if (cursorX != originalX || cursorY != originalY ||
                 hardwareCursor != oldHardwareCursor) {
                 if (!oldHardwareCursor) {
@@ -2338,12 +2397,11 @@ public class Program {
                     }
                 } else {
                     // Restore 2D scanout before software fallback.
-                    if (System.Australis.Gpu.RestoreFrame() != 0) {
-                        System.Console.WriteLine(
-                            "Display: GPU scanout restoration failed");
-                        failure = 10;
-                        break;
-                    }
+					if (gpuScanoutSupported && System.Australis.Gpu.RestoreFrame() != 0) {
+						System.Console.WriteLine("Display: GPU scanout restoration failed");
+						failure = 10;
+						break;
+					}
 
                     // Original software rendering path.
                     int waitCount = Flush(dirty, clip, width, height,
@@ -2426,6 +2484,7 @@ public class Program {
                             }
                             break;
                         }
+						bool gpuScanoutSupported = initialMode == 0;
                         keyEvent[0] = 5; keyEvent[1] = (byte)focused;
                         keyEvent[2] = (byte)key;
                         int channel = firstChannel;
@@ -2445,9 +2504,13 @@ public class Program {
                 failure = 12; break;
             }
         }
-        int released = System.Australis.Display.Release();
-        if (released != 0 && failure == 0) { failure = 13; }
-        return failure;
+		int released = System.Australis.Display.Release();
+		if (released != 0 && failure == 0) { failure = 13; }
+
+		System.Console.Write("Display: exit code = ");
+		System.Console.WriteLine(failure);
+
+		return failure;
     }
 
     private static bool NearGpuRgb(int actual, int expected) {
