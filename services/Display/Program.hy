@@ -1525,6 +1525,84 @@ public class Program {
         return waits;
     }
 
+	private static int FlushRetained(
+		byte[] dirty, int width, int height,
+		int cursorX, int cursorY, bool hardwareCursor) {
+
+		int count = dirty[0];
+		if (count == 0) { return 0; }
+
+		int opened = System.Australis.Display.BeginFrame();
+		int waits = 0;
+
+		while (opened == -11 && waits < 100) {
+			if (System.Australis.Process.Sleep(1) != 0) {
+				return -5;
+			}
+
+			opened = System.Australis.Display.BeginFrame();
+			waits = waits + 1;
+		}
+
+		if (opened != 0) { return -5; }
+
+		bool cursorDamaged = false;
+		int i = 0;
+
+		while (i < count) {
+			int offset = 1 + i * 8;
+
+			int x = dirty[offset] +
+				dirty[offset + 1] * 256;
+
+			int y = dirty[offset + 2] +
+				dirty[offset + 3] * 256;
+
+			int rectWidth = dirty[offset + 4] +
+				dirty[offset + 5] * 256;
+
+			int rectHeight = dirty[offset + 6] +
+				dirty[offset + 7] * 256;
+
+			if (x < 0 || y < 0 ||
+				rectWidth < 1 || rectHeight < 1 ||
+				x > width - rectWidth ||
+				y > height - rectHeight) {
+				return -5;
+			}
+
+			if (!hardwareCursor &&
+				x < cursorX + 14 &&
+				x + rectWidth > cursorX &&
+				y < cursorY + 20 &&
+				y + rectHeight > cursorY) {
+				cursorDamaged = true;
+			}
+
+			int result =
+				System.Australis.Display.RetainedComposeRect(
+					x, y, rectWidth, rectHeight);
+
+			if (result != 0) {
+				return -5;
+			}
+
+			i = i + 1;
+		}
+
+		if (cursorDamaged &&
+			Cursor(cursorX, cursorY) != 0) {
+			return -5;
+		}
+
+		if (System.Australis.Display.PresentFrame() != 0) {
+			return -5;
+		}
+
+		dirty[0] = 0;
+		return waits;
+	}
+
     private static int SubmitWithWait(int handle) {
         int submitted = System.Australis.Display.SubmitBuffer(handle);
         int waits = 0;
@@ -1571,6 +1649,193 @@ public class Program {
         System.Console.WriteLine("Display: two owned buffers completed and released");
         return 0;
     }
+
+	private static int RetainedWindowId(
+		byte[] ids, int offset) {
+
+		return Read16(ids, offset) +
+			Read16(ids, offset + 2) * 65536;
+	}
+
+	private static int SyncRetainedWindow(byte[] ids, int idOffset, byte[] before, byte[] current, int gpuHandle, bool contentChanged) {
+		int windowId = RetainedWindowId(ids, idOffset);
+		if (windowId < 1) {
+			return -22;
+		}
+
+		// Refresh the cached content only when it changes.
+		if (contentChanged) {
+			if (gpuHandle < 1) {
+				return -19;
+			}
+
+			int submitted = System.Australis.Display.RetainedSubmitGpu(windowId, gpuHandle);
+
+			if (submitted != 0) {
+				return submitted;
+			}
+		}
+
+		// Moving a window must not require resubmitting pixels.
+		if (Read16(before, 0) != Read16(current, 0) || Read16(before, 2) != Read16(current, 2)) {
+			return System.Australis.Display.RetainedMove(windowId, Read16(current, 0), Read16(current, 2));
+		}
+
+		return 0;
+	}
+
+	private static int SyncRetainedGeometry(int windowId, byte[] before, byte[] current) {
+		if (windowId < 1) { return -22; }
+		if (before[9] != current[9]) {
+			if (current[9] == 1) {
+				return System.Australis.Display.RetainedMaximize(
+					windowId);
+			}
+
+			return System.Australis.Display.RetainedUnmaximize(
+				windowId);
+		}
+
+		if (current[9] == 1) {
+			return 0;
+		}
+
+		int oldX = Read16(before, 0);
+		int oldY = Read16(before, 2);
+		int oldWidth = Read16(before, 4);
+		int oldHeight = Read16(before, 6);
+
+		int x = Read16(current, 0);
+		int y = Read16(current, 2);
+		int width = Read16(current, 4);
+		int height = Read16(current, 6);
+
+		if (oldX == x && oldY == y &&
+			oldWidth == width && oldHeight == height) {
+			return 0;
+		}
+
+		// Shrink first, then move, then grow.
+		// This avoids temporary out-of-bounds geometry
+		// when resizing from the left or top edge.
+		int intermediateWidth = oldWidth;
+		int intermediateHeight = oldHeight;
+
+		if (width < intermediateWidth) {
+			intermediateWidth = width;
+		}
+
+		if (height < intermediateHeight) {
+			intermediateHeight = height;
+		}
+
+		if (intermediateWidth != oldWidth ||
+			intermediateHeight != oldHeight) {
+
+			if (System.Australis.Display.RetainedResize(
+				windowId,
+				intermediateWidth,
+				intermediateHeight) != 0) {
+				return -5;
+			}
+		}
+
+		if (x != oldX || y != oldY) {
+			if (System.Australis.Display.RetainedMove(
+				windowId, x, y) != 0) {
+				return -5;
+			}
+		}
+
+		if (width != intermediateWidth ||
+			height != intermediateHeight) {
+
+			if (System.Australis.Display.RetainedResize(
+				windowId, width, height) != 0) {
+				return -5;
+			}
+		}
+
+		return 0;
+	}
+
+	private static int StageRetainedWindows(byte[] firstLayout, byte[] secondLayout, int firstGpu, int secondGpu, byte[] windowIds) {
+
+		int enabled =
+			System.Australis.Display.RetainedEnable(
+				TopbarHeight());
+
+		if (enabled != 0) {
+			return enabled;
+		}
+
+		int firstWindow =
+			System.Australis.Display.RetainedOpen(
+				Read16(firstLayout, 0),
+				Read16(firstLayout, 2),
+				Read16(firstLayout, 4),
+				Read16(firstLayout, 6));
+
+		if (firstWindow < 1) {
+			return firstWindow;
+		}
+
+		int secondWindow =
+			System.Australis.Display.RetainedOpen(
+				Read16(secondLayout, 0),
+				Read16(secondLayout, 2),
+				Read16(secondLayout, 4),
+				Read16(secondLayout, 6));
+
+		if (secondWindow < 1) {
+			return secondWindow;
+		}
+
+		int firstSubmit =
+			System.Australis.Display.RetainedSubmitGpu(
+				firstWindow, firstGpu);
+
+		int secondSubmit =
+			System.Australis.Display.RetainedSubmitGpu(
+				secondWindow, secondGpu);
+
+		if (firstSubmit != 0) {
+			return firstSubmit;
+		}
+
+		if (secondSubmit != 0) {
+			return secondSubmit;
+		}
+
+		// The second window starts on top.
+		if (System.Australis.Display.RetainedFocus(
+				secondWindow) != 0) {
+			return -5;
+		}
+
+		// Exercise the movement bridge without changing geometry.
+		if (System.Australis.Display.RetainedMove(
+				firstWindow,
+				Read16(firstLayout, 0),
+				Read16(firstLayout, 2)) != 0) {
+			return -5;
+		}
+
+		if (System.Australis.Display.RetainedHover(
+				-1, -1) != 0) {
+			return -5;
+		}
+
+
+		Write16(windowIds, 0, firstWindow % 65536);
+		Write16(windowIds, 2, firstWindow / 65536);
+
+		Write16(windowIds, 4, secondWindow % 65536);
+		Write16(windowIds, 6, secondWindow / 65536);
+
+		return 0;
+
+	}
 
     public static int Main(string[] args) {
         int width = System.Australis.SystemInfo.Query(23);
@@ -1860,6 +2125,29 @@ public class Program {
             System.Console.WriteLine(
                 "Display: GPU desktop composition passed");
         }
+
+		byte[] retainedWindowIds = new byte[8];
+		bool retainedShadowActive = false;
+
+		if (firstGpu > 0 && secondGpu > 0) {
+			int retainedResult = StageRetainedWindows(
+				firstLayout, secondLayout,
+				firstGpu, secondGpu,
+				retainedWindowIds);
+
+			if (retainedResult != 0) {
+				System.Console.Write(
+					"Display: retained staging failed: ");
+				System.Console.WriteLine(retainedResult);
+
+				System.Australis.Display.Release();
+				return 10;
+			}
+
+			System.Console.WriteLine(
+				"Display: retained GPU window staging passed");
+		}
+
         byte[] clip = new byte[8];
         SetClip(clip, 0, 0, width, height);
         int cursorX = width / 2; int cursorY = height / 2;
@@ -1936,6 +2224,7 @@ public class Program {
         }
 
         if (firstGpu > 0 && secondGpu > 0) {
+			retainedShadowActive = true;
             System.Console.WriteLine(
                 "GPUVIS: starting live GPU visual test");
 
@@ -1984,7 +2273,9 @@ public class Program {
                 int modeWidth = packedMode % 65536;
                 int modeHeight = packedMode / 65536 % 4096;
                 if (modeWidth != width || modeHeight != height) {
-                    width = modeWidth; height = modeHeight;
+					retainedShadowActive = false;
+                    width = modeWidth;
+					height = modeHeight;
                     hardwareCursor = packedMode / 268435456 % 2 == 1;
                     int nextWindowWidth = width / 2 - 30;
                     int nextWindowHeight = height / 2;
@@ -2172,10 +2463,19 @@ public class Program {
 								resizeStartY = Read16(selected, 2);
 								resizeStartWidth = Read16(selected, 4);
 								resizeStartHeight = Read16(selected, 6);
-                            } else if (TitleHit(cursorX, cursorY, selected)) {
-                                dragKind = 1; dragId = hit;
-                            } else if (dragKind == 2) {
-								int dx = cursorX - resizeStartMouseX;
+							} else if (TitleHit(cursorX, cursorY, selected)) {
+								dragKind = 1;
+								dragId = hit;
+							} else if (ContentHit(cursorX, cursorY, selected)) {
+								// Capture pointer input for the clicked application.
+								captured = hit;
+								// Tell the application that its content was clicked.
+								Pointer(captured, 2, cursorX, cursorY,
+									firstLayout, secondLayout,
+									firstChannel, secondChannel,
+									pointerEvent);
+							} else if (dragKind == 2) {
+ 									int dx = cursorX - resizeStartMouseX;
 								int dy = cursorY - resizeStartMouseY;
 
 								int leftEdge = resizeStartX;
@@ -2483,8 +2783,97 @@ public class Program {
                 }
             }
 
+			if (retainedShadowActive) {
+
+				// These operations do not have matching retained APIs yet.
+				bool unsupported =
+					!Visible(firstState, firstLayout) ||
+					!Visible(secondState, secondLayout) ||
+					firstLayout[9] == 1 ||
+					secondLayout[9] == 1 ||
+					Read16(beforeFirst, 4) != Read16(firstLayout, 4) ||
+					Read16(beforeFirst, 6) != Read16(firstLayout, 6) ||
+					Read16(beforeSecond, 4) != Read16(secondLayout, 4) ||
+					Read16(beforeSecond, 6) != Read16(secondLayout, 6);
+
+				if (unsupported) {
+					retainedShadowActive = false;
+					System.Console.WriteLine(
+						"Display: retained shadow suspended");
+				} else {
+					int status = SyncRetainedWindow(retainedWindowIds, 0, beforeFirst, firstLayout, firstGpu, changed == 1 || changed == 2);
+					if (status == 0) {
+						status = SyncRetainedWindow(retainedWindowIds, 4, beforeSecond, secondLayout, secondGpu, other == 1 || other == 2);
+					}
+
+					// Keep retained stacking order aligned with the desktop.
+					if (status == 0 && beforeTop != top) {
+						int selectedId = RetainedWindowId(
+							retainedWindowIds, 0);
+
+						if (top == 2) {
+							selectedId = RetainedWindowId(
+								retainedWindowIds, 4);
+						}
+
+						status = System.Australis.Display.RetainedFocus(
+							selectedId);
+					}
+
+					// Hover follows the existing desktop pointer.
+					if (status == 0 &&
+						(cursorX != originalX || cursorY != originalY)) {
+
+						status = System.Australis.Display.RetainedHover(
+							cursorX, cursorY);
+					}
+
+					if (status != 0) {
+						retainedShadowActive = false;
+						System.Console.Write(
+							"Display: retained sync stopped: ");
+						System.Console.WriteLine(status);
+					}
+				}
+			}
+
             if (dirty[0] > 0) {
                 int gpuFrameResult = 0;
+
+				// Try retained rendering before the old GPU renderer.
+				if (retainedShadowActive) {
+					int retainedResult = FlushRetained(
+						dirty, width, height,
+						cursorX, cursorY, hardwareCursor);
+
+					if (retainedResult >= 0) {
+						// Retained frame already presented.
+						gpuFrameResult = 1;
+						pacingWaits = pacingWaits + retainedResult;
+					} else {
+						// Stop using the shadow until it is rebuilt.
+						retainedShadowActive = false;
+
+						// A failed retained frame may be partially composed.
+						// Force the existing fallback to repaint everything.
+						dirty[0] = 0;
+						Damage(dirty, 0, 0,
+							width, height, width, height);
+
+						System.Console.WriteLine(
+							"Display: retained fallback");
+					}
+				}
+
+				// Only render the legacy GPU frame if retained did not
+				// successfully present the frame.
+				if (gpuFrameResult == 0 && gpuLiveEnabled) {
+					gpuFrameResult = TryGpuLiveFrame(
+						width, height,
+						firstState, firstLayout, firstGpu,
+						secondState, secondLayout, secondGpu,
+						focused, top);
+				}
 
                 // Try GPU rendering first.
                 if (gpuLiveEnabled) {
