@@ -57,24 +57,17 @@ public class Program {
         }
 
         // Existing software window background.
-        if (System.Australis.Gpu.FillFrameRect(
-            x, y, width, height,
-            WindowBackground()) != 0) {
+        if (System.Australis.Gpu.FillFrameRect(x, y, width, height, WindowBackground()) != 0) {
             return -5;
         }
 
         // Existing titlebar geometry and colour.
-        if (System.Australis.Gpu.FillFrameRect(
-            x, y, width, TitlebarHeight(),
-            header) != 0) {
+        if (System.Australis.Gpu.FillFrameRect(x, y, width, TitlebarHeight(), header) != 0) {
             return -5;
         }
 
         // Real process-owned window content.
-        if (System.Australis.Gpu.DrawWindow(
-            gpuHandle,
-            x + 8,
-            ContentTop(layout)) != 0) {
+        if (System.Australis.Gpu.DrawWindow( gpuHandle, x, ContentTop(layout)) != 0) {
             return -5;
         }
 
@@ -474,21 +467,25 @@ public class Program {
         return state[1] == 1 && layout[8] == 1;
     }
 	private static int ContentTop(byte[] layout) {
-		int top = Read16(layout, 2) + TitlebarHeight();
+		int y = Read16(layout, 2);
 
 		if (layout[9] == 1) {
-			top = Read16(layout, 2) + 8;
+			return y;
 		}
 
-		return top;
+		return y + TitlebarHeight();
 	}
-    private static int ContentWidth(byte[] layout) {
-        return Read16(layout, 4) - 16;
-    }
-    private static int ContentHeight(byte[] layout) {
-        return Read16(layout, 2) + Read16(layout, 6) - 8 -
-            ContentTop(layout);
-    }
+
+	private static int ContentWidth(byte[] layout) {
+		return Read16(layout, 4);
+	}
+
+	private static int ContentHeight(byte[] layout) {
+		int y = Read16(layout, 2);
+		int height = Read16(layout, 6);
+
+		return y + height - ContentTop(layout);
+	}
     private static int UpdateTextureCell(int handle, byte[] layout,
         byte[] cells, int column, int row) {
         if (handle < 1 || column < 0 || column >= 4 ||
@@ -812,27 +809,19 @@ public class Program {
         }
 
         // Entire rounded window background.
-        if (GpuRoundedBand(
-            x, y, width, height,
-            0, height,
-            WindowRadius(),
-            WindowBackground()) != 0) {
+        if (GpuRoundedBand(x, y, width, height, 0, height, WindowRadius(), WindowBackground()) != 0) {
             System.Console.WriteLine("GPUDBG: rounded window background failed ");
             return -5;
         }
 
         // Rounded top corners; straight bottom of titlebar.
-        if (GpuRoundedBand(
-            x, y, width, height,
-            0, TitlebarHeight(),
-            WindowRadius(), header) != 0) {
+        if (GpuRoundedBand(x, y, width, height, 0, TitlebarHeight(), WindowRadius(), header) != 0) {
             System.Console.WriteLine("GPUDBG: rounded titlebar failed");
             return -5;
         }
 
         // Existing process-owned GPU window texture.
-        if (System.Australis.Gpu.DrawWindow(
-            handle, x + 8, ContentTop(layout)) != 0) {
+        if (System.Australis.Gpu.DrawWindow(handle, x, ContentTop(layout)) != 0) {
             System.Console.WriteLine("GPUDBG: rounded window texture failed");
             return -5;
         }
@@ -2798,8 +2787,7 @@ public class Program {
 
 				if (unsupported) {
 					retainedShadowActive = false;
-					System.Console.WriteLine(
-						"Display: retained shadow suspended");
+					System.Console.WriteLine("Display: retained shadow suspended");
 				} else {
 					int status = SyncRetainedWindow(retainedWindowIds, 0, beforeFirst, firstLayout, firstGpu, changed == 1 || changed == 2);
 					if (status == 0) {
@@ -2830,8 +2818,7 @@ public class Program {
 
 					if (status != 0) {
 						retainedShadowActive = false;
-						System.Console.Write(
-							"Display: retained sync stopped: ");
+						System.Console.Write("Display: retained sync stopped: ");
 						System.Console.WriteLine(status);
 					}
 				}
@@ -2839,13 +2826,9 @@ public class Program {
 
             if (dirty[0] > 0) {
                 int gpuFrameResult = 0;
-
 				// Try retained rendering before the old GPU renderer.
 				if (retainedShadowActive) {
-					int retainedResult = FlushRetained(
-						dirty, width, height,
-						cursorX, cursorY, hardwareCursor);
-
+					int retainedResult = FlushRetained(dirty, width, height, cursorX, cursorY, hardwareCursor);
 					if (retainedResult >= 0) {
 						// Retained frame already presented.
 						gpuFrameResult = 1;
@@ -2857,40 +2840,21 @@ public class Program {
 						// A failed retained frame may be partially composed.
 						// Force the existing fallback to repaint everything.
 						dirty[0] = 0;
-						Damage(dirty, 0, 0,
-							width, height, width, height);
+						Damage(dirty, 0, 0, width, height, width, height);
 
-						System.Console.WriteLine(
-							"Display: retained fallback");
+						System.Console.WriteLine("Display: retained fallback");
 					}
 				}
 
 				// Only render the legacy GPU frame if retained did not
 				// successfully present the frame.
 				if (gpuFrameResult == 0 && gpuLiveEnabled) {
-					gpuFrameResult = TryGpuLiveFrame(
-						width, height,
-						firstState, firstLayout, firstGpu,
-						secondState, secondLayout, secondGpu,
-						focused, top);
+					gpuFrameResult = TryGpuLiveFrame(width, height, firstState, firstLayout, firstGpu, secondState, secondLayout, secondGpu, focused, top);
+					if (gpuFrameResult < 0) {
+						gpuLiveEnabled = false;
+						System.Console.WriteLine("Display: GPU composition failed; software fallback");
+					}
 				}
-
-                // Try GPU rendering first.
-                if (gpuLiveEnabled) {
-                    gpuFrameResult = TryGpuLiveFrame(
-                        width, height,
-                        firstState, firstLayout, firstGpu,
-                        secondState, secondLayout, secondGpu,
-                        focused, top
-                    );
-
-                    if (gpuFrameResult < 0) {
-                        gpuLiveEnabled = false;
-
-                        System.Console.WriteLine(
-                            "Display: GPU composition failed; software fallback");
-                    }
-                }
 
                 if (gpuFrameResult == 1) {
                     // GPU has presented the complete frame.
