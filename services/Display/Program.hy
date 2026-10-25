@@ -581,32 +581,48 @@ public class Program {
         return Paint(x, y, right - x, bottom - y, rgb);
     }
 
-	private static int DrawControl(int x, int y, int color, int kind, bool hovered, byte[] clip) {
+	private static int DrawControl(int x, int y, int color,
+		int kind, bool hovered, byte[] clip) {
+
 		int size = TitlebarControlSize();
 
-		// Draw a filled circle.
+		int clipX = Read16(clip, 0);
+		int clipY = Read16(clip, 2);
+		int clipRight = clipX + Read16(clip, 4);
+		int clipBottom = clipY + Read16(clip, 6);
+
+		// Completely outside the damaged region?
+		// Don't process this control at all.
+		if (x >= clipRight || x + size <= clipX ||
+			y >= clipBottom || y + size <= clipY) {
+			return 0;
+		}
+
+		// Combine consecutive rows with identical circle widths.
 		int row = 0;
 
 		while (row < size) {
-			int dy = row * 2 + 1 - size;
-			int inset = 0;
+			int inset = ControlInset(row, size);
+			int next = row + 1;
 
-			while (inset < size) {
-				int dx = inset * 2 + 1 - size;
-
-				if (dx * dx + dy * dy <= size * size) {
-					break;
-				}
-
-				inset = inset + 1;
+			while (next < size &&
+				ControlInset(next, size) == inset) {
+				next = next + 1;
 			}
+
 			int span = size - inset * 2;
+
 			if (span > 0) {
-				if (Clip(x + inset, y + row, span, 1, color, clip) != 0) {
+				if (Clip(
+					x + inset, y + row,
+					span, next - row,
+					color, clip
+				) != 0) {
 					return -5;
 				}
 			}
-			row = row + 1;
+
+			row = next;
 		}
 
 		// Draw the hover icon, scaled to the button.
@@ -841,14 +857,37 @@ public class Program {
 			}
 		} else {
 			int header = UnfocusedTitlebar();
+
 			if (focused) {
 				header = FocusedTitlebar();
 			}
-			if (RoundedBand(x, y, width, height, 0, height, WindowRadius(), WindowBackground(), clip) != 0) {
-				return -5;
+
+			int clipTop = Read16(clip, 2);
+			int clipBottom = clipTop + Read16(clip, 6);
+
+			// The titlebar completely replaces the window background
+			// within its own bounds, including the rounded corners.
+			bool titlebarOnly =
+				clipTop >= y &&
+				clipBottom <= y + TitlebarHeight();
+
+			if (!titlebarOnly) {
+				if (RoundedBand(
+					x, y, width, height,
+					0, height,
+					WindowRadius(),
+					WindowBackground(),
+					clip
+				) != 0) {
+					return -5;
+				}
 			}
 
-			System.Console.WriteLine("DBG: window background complete");
+			if (titlebarOnly) {
+				System.Console.WriteLine("DBG: window body skipped");
+			} else {
+				System.Console.WriteLine("DBG: window background complete");
+			}
 
 			// Allow the scheduler to run between drawing stages.
 			if (System.Australis.Process.Sleep(1) != 0) {
@@ -2206,14 +2245,31 @@ public class Program {
 							}
                         }
                     }
-                    if (focused != previousFocus) {
-                        int capture = 0;
-                        if (focused > 0) { capture = 1; }
-                        if (System.Australis.Display.CaptureKeyboard(capture) != 0) {
-                            System.Console.WriteLine("Display: keyboard capture failure");
-                            inputFailure = 1; break;
-                        }
-                    }
+
+					if (focused != previousFocus || focused > 0) {
+						int capture = 0;
+						if (focused > 0) {
+							capture = 1;
+						}
+
+						int captureResult =
+							System.Australis.Display.CaptureKeyboard(capture);
+
+						System.Console.Write("DBG: keyboard focus=");
+						System.Console.Write(focused);
+						System.Console.Write(" capture=");
+						System.Console.Write(capture);
+						System.Console.Write(" result=");
+						System.Console.WriteLine(captureResult);
+
+						if (captureResult != 0) {
+							System.Console.WriteLine(
+								"Display: keyboard capture failure");
+							inputFailure = 1;
+							break;
+						}
+					}
+
                 } else if (nextButtons == 1 && buttons == 1) {
                     if (dragKind > 0 && dragId > 0 &&
                         (deltaX != 0 || deltaY != 0)) {
@@ -2524,7 +2580,12 @@ public class Program {
             if (focused > 0) {
                 int keys = 0;
                 while (keys < 8) {
-                    int key = System.Australis.Display.PollKey();
+					int key = System.Australis.Display.PollKey();
+
+					if (key >= 0) {
+						System.Console.Write("DBG: Display received key=");
+						System.Console.WriteLine(key);
+					}
                     if (key == -1) { break; }
                     if (key < -1) {
                         System.Console.WriteLine("Display: keyboard input failure");

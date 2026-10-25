@@ -1,5 +1,5 @@
 format = 2
-name = "australlis.userland"
+name = "Australis.Userland"
 version = "0.0.1"
 type = "exec"
 output = "system/Core/System.exec"
@@ -7,7 +7,7 @@ sources = ["./program.hy"]
 project_references = []
 
 [package]
-id = "australlis.userland"
+id = "australis.userland"
 description = ""
 authors = ["Aurora Softwares"]
 license = "MIT"
