@@ -1,0 +1,32 @@
+format = 2
+name = "Australis Userland"
+type = "collection"
+sources = []
+project_references = [
+	"australis.userland.hyproj",
+	"commands/Cat/Cat.hyproj",
+	"commands/Ls/Ls.hyproj",
+	"commands/Ps/Ps.hyproj",
+	"commands/Drivers/Drivers.hyproj",
+	"commands/Mem/Mem.hyproj",
+	"commands/Echo/Echo.hyproj",
+	"commands/Tree/Tree.hyproj",
+	"commands/Mkdir/Mkdir.hyproj",
+	"commands/Touch/Touch.hyproj",
+	"commands/Cp/Cp.hyproj",
+	"commands/Mv/Mv.hyproj",
+	"commands/Rm/Rm.hyproj",
+	"commands/Edit/Edit.hyproj",
+	"commands/Hexedit/Hexedit.hyproj",
+	"services/Device/Device.hyproj",
+	"services/Storage/Storage.hyproj",
+	"services/Display/Display.hyproj",
+	"services/DisplayDemoA/DisplayDemoA.hyproj",
+	"services/DisplayDemoB/DisplayDemoB.hyproj"
+]
+
+[package]
+id = "australis.userland.collection"
+description = "Australis core services and commands"
+authors = ["Aurora Softwares"]
+license = "MIT"
