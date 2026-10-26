@@ -2,21 +2,27 @@ public class Program {
     private static int FocusedTitlebar() {
         return 0xE5E8ED; //0x7DA7CB const
     }
-    private static int UnfocusedTitlebar() {
+
+	private static int UnfocusedTitlebar() {
         return 0xE5E8ED; // 0xC7CED6 const
     }
-    private static int WindowBackground() {
+
+	private static int WindowBackground() {
         return 0xE5E8ED; // const
     }
-    private static int WindowRadius() {
+
+	private static int WindowRadius() {
         return 12; // const
     }
+
 	private static int WindowBorder() {
 		return 0; // 8 const
 	}
+
 	private static int TitlebarHeight() {
 		return 30; // const
 	}
+
 	private static int WindowResizeGrip() {
 		return 10; // const
 	}
@@ -24,22 +30,22 @@ public class Program {
 	private static int TitlebarControlSize() {
 		return 12; // const
 	}
+
 	private static int TopbarHeight() {
 		return 30; // const
 	}
+
 	private static int ControlX(int barX, int index) {
 		int size = TitlebarControlSize();
 		return barX + 8 + index * (size + 10);
 	}
+
 	private static int ControlY(int barY, int barHeight) {
 		return barY +
 			(barHeight - TitlebarControlSize()) / 2;
 	}
 
-    private static int GpuDrawDecoratedWindow(
-        byte[] layout,
-        int gpuHandle,
-        bool focused) {
+    private static int GpuDrawDecoratedWindow(byte[] layout, int gpuHandle, bool focused) {
 
         if (gpuHandle < 1 || layout[9] != 0) {
             return -95;
@@ -74,10 +80,7 @@ public class Program {
         return 0;
     }
 
-    private static int ProbeGpuDecoratedWindows(
-        int firstGpu, int secondGpu,
-        byte[] firstLayout, byte[] secondLayout,
-        int screenWidth, int screenHeight) {
+    private static int ProbeGpuDecoratedWindows(int firstGpu, int secondGpu, byte[] firstLayout, byte[] secondLayout, int screenWidth, int screenHeight) {
 
         if (firstGpu < 1 || secondGpu < 1 ||
             firstLayout[9] != 0 ||
@@ -294,10 +297,7 @@ public class Program {
 		return 0;
 	}
 
-    private static int GpuRoundedBand(
-        int x, int y, int width, int height,
-        int firstRow, int lastRow,
-        int radius, int rgb) {
+    private static int GpuRoundedBand(int x, int y, int width, int height, int firstRow, int lastRow, int radius, int rgb) {
 
         int row = firstRow;
 
@@ -453,19 +453,22 @@ public class Program {
     private static int Read16(byte[] data, int offset) {
         return data[offset] + data[offset + 1] * 256;
     }
-    private static void Write16(byte[] data, int offset, int value) {
+
+	private static void Write16(byte[] data, int offset, int value) {
         data[offset] = (byte)(value % 256);
         data[offset + 1] = (byte)(value / 256);
     }
-    private static void InitLayout(byte[] layout, int x, int y,
-        int width, int height) {
+
+	private static void InitLayout(byte[] layout, int x, int y, int width, int height) {
         Write16(layout, 0, x); Write16(layout, 2, y);
         Write16(layout, 4, width); Write16(layout, 6, height);
         layout[8] = 1; layout[9] = 0; layout[18] = 0;
     }
-    private static bool Visible(byte[] state, byte[] layout) {
+
+	private static bool Visible(byte[] state, byte[] layout) {
         return state[1] == 1 && layout[8] == 1;
     }
+
 	private static int ContentTop(byte[] layout) {
 		int y = Read16(layout, 2);
 
@@ -486,8 +489,8 @@ public class Program {
 
 		return y + height - ContentTop(layout);
 	}
-    private static int UpdateTextureCell(int handle, byte[] layout,
-        byte[] cells, int column, int row) {
+
+	private static int UpdateTextureCell(int handle, byte[] layout, byte[] cells, int column, int row) {
         if (handle < 1 || column < 0 || column >= 4 ||
             row < 0 || row >= 4) { return -22; }
         int width = ContentWidth(layout);
@@ -502,7 +505,8 @@ public class Program {
         return System.Australis.Gpu.FillRect(handle, left, top,
             right - left, bottom - top, rgb);
     }
-    private static int CreateWindowTexture(byte[] layout, byte[] cells) {
+
+	private static int CreateWindowTexture(byte[] layout, byte[] cells) {
         int width = ContentWidth(layout);
         int height = ContentHeight(layout);
         if (width < 1 || height < 1) { return -22; }
@@ -523,11 +527,13 @@ public class Program {
         }
         return handle;
     }
-    private static void CopyLayout(byte[] source, byte[] target) {
+
+	private static void CopyLayout(byte[] source, byte[] target) {
         int i = 0;
         while (i < 19) { target[i] = source[i]; i = i + 1; }
     }
-    private static bool LayoutChanged(byte[] before, byte[] after) {
+
+	private static bool LayoutChanged(byte[] before, byte[] after) {
         int i = 0;
         while (i < 18) {
             if (before[i] != after[i]) { return true; }
@@ -535,7 +541,8 @@ public class Program {
         }
         return false;
     }
-    private static void ToggleMax(byte[] layout, int width, int height) {
+
+	private static void ToggleMax(byte[] layout, int width, int height) {
         if (layout[9] == 0) {
             Write16(layout, 10, Read16(layout, 0));
             Write16(layout, 12, Read16(layout, 2));
@@ -563,8 +570,8 @@ public class Program {
         clip[4] = (byte)(width % 256); clip[5] = (byte)(width / 256);
         clip[6] = (byte)(height % 256); clip[7] = (byte)(height / 256);
     }
-    private static int Clip(int x, int y, int width, int height, int rgb,
-        byte[] clip) {
+
+	private static int Clip(int x, int y, int width, int height, int rgb, byte[] clip) {
         int clipX = clip[0] + clip[1] * 256;
         int clipY = clip[2] + clip[3] * 256;
         int clipWidth = clip[4] + clip[5] * 256;
@@ -578,8 +585,7 @@ public class Program {
         return Paint(x, y, right - x, bottom - y, rgb);
     }
 
-	private static int DrawControl(int x, int y, int color,
-		int kind, bool hovered, byte[] clip) {
+	private static int DrawControl(int x, int y, int color, int kind, bool hovered, byte[] clip) {
 
 		int size = TitlebarControlSize();
 
@@ -676,9 +682,7 @@ public class Program {
 		return 0;
 	}
 
-    private static int GpuDrawControl(
-        int x, int y, int color,
-        int kind, bool hovered) {
+    private static int GpuDrawControl(int x, int y, int color, int kind, bool hovered) {
 
         int size = TitlebarControlSize();
         int row = 0;
@@ -790,8 +794,7 @@ public class Program {
         return inset;
     }
 
-    private static int GpuDrawRoundedWindow(
-        byte[] layout, int handle, bool focused) {
+    private static int GpuDrawRoundedWindow(byte[] layout, int handle, bool focused) {
 
         if (handle < 1 || layout[9] != 0) {
             return -95;
@@ -828,7 +831,7 @@ public class Program {
 
         // Foreground window controls.
         if (GpuDrawControls(x, y, layout) != 0) {
-        System.Console.WriteLine("GPUDBG: rounded window controls failed");
+        	System.Console.WriteLine("GPUDBG: rounded window controls failed");
             return -5;
         }
 
@@ -872,11 +875,11 @@ public class Program {
 				}
 			}
 
-			if (titlebarOnly) {
-				System.Console.WriteLine("DBG: window body skipped");
-			} else {
-				System.Console.WriteLine("DBG: window background complete");
-			}
+			//if (titlebarOnly) {
+			//	System.Console.WriteLine("DBG: window body skipped");
+			//} else {
+			//	System.Console.WriteLine("DBG: window background complete");
+			//}
 
 			// Allow the scheduler to run between drawing stages.
 			if (System.Australis.Process.Sleep(1) != 0) {
@@ -1065,8 +1068,8 @@ public class Program {
             Paint(x + 4, y + 14, 1, 5, 0xFFFFFF) != 0) { return -5; }
         return 0;
     }
-    private static int ComposeGpuTile(int handle, int target,
-        byte[] cells) {
+
+	private static int ComposeGpuTile(int handle, int target, byte[] cells) {
         if (handle < 1) { return 0; }
         int rgb = cells[0] * 65536 + cells[1] * 256 + cells[2];
         int cleared = System.Australis.Gpu.Clear(handle, rgb);
@@ -1106,8 +1109,7 @@ public class Program {
     // Version 2: create [1,R,G,B], update [2,id,col,row,R,G,B],
     // close [3,id]. The kernel binds each channel to one child PID.
     // A client can update only the ID assigned to its own channel.
-    private static int Handle(int channel, int id, byte[] state, byte[] cells,
-        byte[] message, byte[] reply) {
+    private static int Handle(int channel, int id, byte[] state, byte[] cells, byte[] message, byte[] reply) {
         if (System.Australis.Channel.Peer(channel) < 1) {
             if (state[1] == 1) { state[1] = 0; return 1; }
             return 0;
@@ -1144,8 +1146,7 @@ public class Program {
 
     // A bounded list of clipped damage rectangles. If more than sixteen
     // regions accumulate, repaint the screen once.
-    private static void Damage(byte[] dirty, int x, int y, int width,
-        int height, int displayWidth, int displayHeight) {
+    private static void Damage(byte[] dirty, int x, int y, int width, int height, int displayWidth, int displayHeight) {
         if (width < 1 || height < 1 || x >= displayWidth ||
             y >= displayHeight) { return; }
         if (x < 0) { width = width + x; x = 0; }
@@ -1202,15 +1203,14 @@ public class Program {
         dirty[0] = (byte)(count + 1);
     }
 
-    private static void DamageLayout(byte[] dirty, byte[] layout,
-        int width, int height) {
+    private static void DamageLayout(byte[] dirty, byte[] layout, int width, int height) {
         if (layout[8] == 1) {
             Damage(dirty, Read16(layout, 0), Read16(layout, 2),
                 Read16(layout, 4), Read16(layout, 6), width, height);
         }
     }
-    private static void DamageTransition(byte[] dirty, byte[] before,
-        byte[] after, int width, int height) {
+
+	private static void DamageTransition(byte[] dirty, byte[] before, byte[] after, int width, int height) {
         if (before[8] == 0) {
             DamageLayout(dirty, after, width, height); return;
         }
@@ -1232,8 +1232,8 @@ public class Program {
         Damage(dirty, left, top, right - left, bottom - top,
             width, height);
     }
-    private static void DamageOverlap(byte[] dirty, byte[] first,
-        byte[] second, int width, int height) {
+
+	private static void DamageOverlap(byte[] dirty, byte[] first, byte[] second, int width, int height) {
         if (first[8] == 0 || second[8] == 0) { return; }
         int left = Read16(first, 0); int top = Read16(first, 2);
         int right = left + Read16(first, 4);
@@ -1250,8 +1250,8 @@ public class Program {
         Damage(dirty, left, top, right - left, bottom - top,
             width, height);
     }
-    private static void DamageCell(byte[] dirty, byte[] state, byte[] layout,
-        int width, int height) {
+
+	private static void DamageCell(byte[] dirty, byte[] state, byte[] layout, int width, int height) {
         if (!Visible(state, layout)) { return; }
         int x = Read16(layout, 0); int y = Read16(layout, 2);
         int windowWidth = Read16(layout, 4);
@@ -1267,8 +1267,7 @@ public class Program {
         Damage(dirty, left, top, right - left, bottom - top, width, height);
     }
 
-    private static bool HitWindow(int x, int y, byte[] state,
-        byte[] layout) {
+    private static bool HitWindow(int x, int y, byte[] state, byte[] layout) {
         if (!Visible(state, layout)) { return false; }
         int left = Read16(layout, 0); int top = Read16(layout, 2);
         int width = Read16(layout, 4); int height = Read16(layout, 6);
@@ -1289,6 +1288,7 @@ public class Program {
 		}
         return true;
     }
+
 	private static int Hit(int x, int y, byte[] firstState, byte[] firstLayout, byte[] secondState, byte[] secondLayout, int top) {
 		if (top == 1) {
 			if (Visible(firstState, firstLayout) && (ResizeEdges(x, y, firstLayout) != 0 || HitWindow(x, y, firstState, firstLayout))) {
@@ -1328,9 +1328,8 @@ public class Program {
                 Read16(layout, 4), TitlebarHeight(), width, height);
         }
     }
-	private static void ControlDamage(
-		byte[] dirty, byte[] layout, int control,
-		int width, int height) {
+
+	private static void ControlDamage(byte[] dirty, byte[] layout, int control, int width, int height) {
 
 		if (layout[8] == 0 || control < 1 || control > 3) {
 			return;
@@ -1357,7 +1356,8 @@ public class Program {
 			width, height
 		);
 	}
-    private static int MenuHit(int x, int y, int width,
+
+	private static int MenuHit(int x, int y, int width,
         byte[] firstState, byte[] secondState) {
         if (y < 8 || y >= 24) { return 0; }
         if (x >= width - 80 && x < width - 48 &&
@@ -1366,6 +1366,7 @@ public class Program {
             secondState[1] == 1) { return 2; }
         return 0;
     }
+
 	private static int ControlHit(int x, int y, byte[] layout) {
 		int left = Read16(layout, 0);
 		int top = Read16(layout, 2);
@@ -1391,6 +1392,7 @@ public class Program {
 
 		return 0;
 	}
+
 	private static int ResizeEdges(int x, int y, byte[] layout) {
 		if (layout[9] == 1 || layout[8] == 0) {
 			return 0;
@@ -1423,6 +1425,7 @@ public class Program {
 
 		return edges;
 	}
+
 	private static bool TitleHit(int x, int y, byte[] layout) {
 		if (layout[9] == 1) {
 			return false;
@@ -1435,9 +1438,7 @@ public class Program {
 
     // Kinds: 1 move, 2 down, 3 up. Coordinates are clipped to the
     // target's content and never name another client's surface.
-    private static void Pointer(int id, int kind, int x, int y,
-        byte[] firstLayout, byte[] secondLayout,
-        int firstChannel, int secondChannel, byte[] event) {
+    private static void Pointer(int id, int kind, int x, int y, byte[] firstLayout, byte[] secondLayout, int firstChannel, int secondChannel, byte[] event) {
         if (id < 1) { return; }
         byte[] layout = firstLayout; int channel = firstChannel;
         if (id == 2) {
@@ -1460,12 +1461,7 @@ public class Program {
         int sent = System.Australis.Channel.Send(channel, 2, event);
     }
 
-    private static int Flush(byte[] dirty, byte[] clip, int width,
-        int height, byte[] firstState, byte[] firstCells,
-        byte[] firstLayout, byte[] secondState, byte[] secondCells,
-        byte[] secondLayout, int focused, int top, int cursorX,
-        int cursorY, bool hardwareCursor, int firstGpu,
-        int secondGpu) {
+    private static int Flush(byte[] dirty, byte[] clip, int width, int height, byte[] firstState, byte[] firstCells, byte[] firstLayout, byte[] secondState, byte[] secondCells, byte[] secondLayout, int focused, int top, int cursorX, int cursorY, bool hardwareCursor, int firstGpu, int secondGpu) {
         int count = dirty[0];
         int opened = System.Australis.Display.BeginFrame();
         int waits = 0;
@@ -1514,9 +1510,7 @@ public class Program {
         return waits;
     }
 
-	private static int FlushRetained(
-		byte[] dirty, int width, int height,
-		int cursorX, int cursorY, bool hardwareCursor) {
+	private static int FlushRetained(byte[] dirty, int width, int height, int cursorX, int cursorY, bool hardwareCursor) {
 
 		int count = dirty[0];
 		if (count == 0) { return 0; }
@@ -1533,7 +1527,11 @@ public class Program {
 			waits = waits + 1;
 		}
 
-		if (opened != 0) { return -5; }
+		if (opened != 0) {
+			System.Console.Write("Display: retained BeginFrame failed: ");
+			System.Console.WriteLine(opened);
+			return -5;
+		}
 
 		bool cursorDamaged = false;
 		int i = 0;
@@ -1568,23 +1566,28 @@ public class Program {
 				cursorDamaged = true;
 			}
 
-			int result =
-				System.Australis.Display.RetainedComposeRect(
-					x, y, rectWidth, rectHeight);
+			int result = System.Australis.Display.RetainedComposeRect(x, y, rectWidth, rectHeight);
 
 			if (result != 0) {
+				System.Console.Write("Display: retained ComposeRect failed: ");
+				System.Console.WriteLine(result);
 				return -5;
 			}
 
 			i = i + 1;
 		}
 
-		if (cursorDamaged &&
-			Cursor(cursorX, cursorY) != 0) {
+		int cursorResult = Cursor(cursorX, cursorY);
+		if (cursorResult != 0) {
+			System.Console.Write("Display: retained cursor failed: ");
+			System.Console.WriteLine(cursorResult);
 			return -5;
 		}
 
-		if (System.Australis.Display.PresentFrame() != 0) {
+		int presentResult = System.Australis.Display.PresentFrame();
+		if (presentResult != 0) {
+			System.Console.Write("Display: retained PresentFrame failed: ");
+			System.Console.WriteLine(presentResult);
 			return -5;
 		}
 
@@ -1639,14 +1642,13 @@ public class Program {
         return 0;
     }
 
-	private static int RetainedWindowId(
-		byte[] ids, int offset) {
+	private static int RetainedWindowId(byte[] ids, int offset) {
 
 		return Read16(ids, offset) +
 			Read16(ids, offset + 2) * 65536;
 	}
 
-	private static int SyncRetainedWindow(byte[] ids, int idOffset, byte[] before, byte[] current, int gpuHandle, bool contentChanged) {
+	private static int SyncRetainedWindow(byte[] ids, int idOffset, byte[] before, byte[] current, byte[] cells, int gpuHandle, bool contentChanged) {
 		int windowId = RetainedWindowId(ids, idOffset);
 		if (windowId < 1) {
 			return -22;
@@ -1654,16 +1656,19 @@ public class Program {
 
 		// Refresh the cached content only when it changes.
 		if (contentChanged) {
-			if (gpuHandle < 1) {
-				return -19;
-			}
+            int submitted = -19;
+            if (gpuHandle > 0) {
+                submitted = System.Australis.Display.RetainedSubmitGpu(
+                    windowId, gpuHandle);
+            } else {
+                submitted = System.Australis.Display.RetainedSubmitCells(
+                    windowId, cells);
+            }
 
-			int submitted = System.Australis.Display.RetainedSubmitGpu(windowId, gpuHandle);
-
-			if (submitted != 0) {
-				return submitted;
-			}
-		}
+            if (submitted != 0) {
+                return submitted;
+            }
+        }
 
 		// Moving a window must not require resubmitting pixels.
 		if (Read16(before, 0) != Read16(current, 0) || Read16(before, 2) != Read16(current, 2)) {
@@ -1748,7 +1753,7 @@ public class Program {
 		return 0;
 	}
 
-	private static int StageRetainedWindows(byte[] firstLayout, byte[] secondLayout, int firstGpu, int secondGpu, byte[] windowIds) {
+	private static int StageRetainedWindows(byte[] firstLayout, byte[] secondLayout, byte[] firstCells, byte[] secondCells, int firstGpu, int secondGpu, byte[] windowIds) {
 
 		int enabled =
 			System.Australis.Display.RetainedEnable(
@@ -1780,13 +1785,23 @@ public class Program {
 			return secondWindow;
 		}
 
-		int firstSubmit =
-			System.Australis.Display.RetainedSubmitGpu(
-				firstWindow, firstGpu);
+		int firstSubmit = -19;
+        if (firstGpu > 0) {
+            firstSubmit = System.Australis.Display.RetainedSubmitGpu(
+                firstWindow, firstGpu);
+        } else {
+            firstSubmit = System.Australis.Display.RetainedSubmitCells(
+                firstWindow, firstCells);
+        }
 
-		int secondSubmit =
-			System.Australis.Display.RetainedSubmitGpu(
-				secondWindow, secondGpu);
+        int secondSubmit = -19;
+        if (secondGpu > 0) {
+            secondSubmit = System.Australis.Display.RetainedSubmitGpu(
+                secondWindow, secondGpu);
+        } else {
+            secondSubmit = System.Australis.Display.RetainedSubmitCells(
+                secondWindow, secondCells);
+        }
 
 		if (firstSubmit != 0) {
 			return firstSubmit;
@@ -2028,8 +2043,7 @@ public class Program {
 
         if (firstGpu > 0 && secondGpu > 0) {
 
-            System.Console.WriteLine(
-                "GPUDBG: before rounded probe");
+            System.Console.WriteLine("GPUDBG: before rounded probe");
 
             int roundedResult = ProbeGpuRoundedDecorations(
                 firstGpu, secondGpu,
@@ -2111,38 +2125,40 @@ public class Program {
                 return 10;
             }
 
-            System.Console.WriteLine(
-                "Display: GPU desktop composition passed");
+            System.Console.WriteLine("Display: GPU desktop composition passed");
         }
 
-		byte[] retainedWindowIds = new byte[8];
-		bool retainedShadowActive = false;
+        byte[] retainedWindowIds = new byte[8];
+        bool retainedShadowActive = false;
+        bool retainedStagingReady = false;
 
-		if (firstGpu > 0 && secondGpu > 0) {
-			int retainedResult = StageRetainedWindows(
-				firstLayout, secondLayout,
-				firstGpu, secondGpu,
-				retainedWindowIds);
+        // Stage retained windows whether their content comes from a GPU
+        // texture or from the CPU-backed compact cell buffer.
+        int retainedResult = StageRetainedWindows(
+            firstLayout, secondLayout,
+            firstCells, secondCells,
+            firstGpu, secondGpu,
+            retainedWindowIds);
 
-			if (retainedResult != 0) {
-				System.Console.Write(
-					"Display: retained staging failed: ");
-				System.Console.WriteLine(retainedResult);
+        if (retainedResult != 0) {
+            System.Console.Write("Display: retained staging failed: ");
+            System.Console.WriteLine(retainedResult);
+            System.Australis.Display.Release();
+            return 10;
+        }
 
-				System.Australis.Display.Release();
-				return 10;
-			}
-
-			System.Console.WriteLine(
-				"Display: retained GPU window staging passed");
-		}
+        retainedStagingReady = true;
+        if (firstGpu > 0 && secondGpu > 0) {
+            System.Console.WriteLine("Display: retained GPU window staging passed");
+        } else {
+            System.Console.WriteLine("Display: retained CPU window staging passed");
+        }
 
         byte[] clip = new byte[8];
         SetClip(clip, 0, 0, width, height);
         int cursorX = width / 2; int cursorY = height / 2;
 
-        System.Console.WriteLine(
-            "DBG: resetting instruction budget before software frame");
+        System.Console.WriteLine("DBG: resetting instruction budget before software frame");
 
         int preFrameSleep = System.Australis.Process.Sleep(1);
 
@@ -2213,7 +2229,7 @@ public class Program {
         }
 
         if (firstGpu > 0 && secondGpu > 0) {
-			retainedShadowActive = true;
+            retainedShadowActive = retainedStagingReady;
             System.Console.WriteLine(
                 "GPUVIS: starting live GPU visual test");
 
@@ -2228,6 +2244,10 @@ public class Program {
                 int released = System.Australis.Display.Release();
                 return 10;
             }
+        } else if (retainedStagingReady) {
+            // CPU-backed retained composition is not the VirGL visual test.
+            retainedShadowActive = true;
+            System.Console.WriteLine("Display: retained CPU window composition active");
         }
 
         byte[] mouse = new byte[3];
@@ -2252,6 +2272,7 @@ public class Program {
         bool gpuLiveEnabled = gpuScanoutSupported;
         int gpuLiveFrames = 0;
         int pacingWaits = 1; // Startup checks that the early frame is deferred.
+
         while (true) {
             if (initialMode == 0) {
                 int packedMode = System.Australis.Display.SetMode(0, 0);
@@ -2262,7 +2283,6 @@ public class Program {
                 int modeWidth = packedMode % 65536;
                 int modeHeight = packedMode / 65536 % 4096;
                 if (modeWidth != width || modeHeight != height) {
-					retainedShadowActive = false;
                     width = modeWidth;
 					height = modeHeight;
                     hardwareCursor = packedMode / 268435456 % 2 == 1;
@@ -2789,9 +2809,9 @@ public class Program {
 					retainedShadowActive = false;
 					System.Console.WriteLine("Display: retained shadow suspended");
 				} else {
-					int status = SyncRetainedWindow(retainedWindowIds, 0, beforeFirst, firstLayout, firstGpu, changed == 1 || changed == 2);
+					int status = SyncRetainedWindow(retainedWindowIds, 0, beforeFirst, firstLayout, firstCells, firstGpu, changed == 1 || changed == 2);
 					if (status == 0) {
-						status = SyncRetainedWindow(retainedWindowIds, 4, beforeSecond, secondLayout, secondGpu, other == 1 || other == 2);
+						status = SyncRetainedWindow(retainedWindowIds, 4, beforeSecond, secondLayout, secondCells, secondGpu, other == 1 || other == 2);
 					}
 
 					// Keep retained stacking order aligned with the desktop.
@@ -2834,6 +2854,8 @@ public class Program {
 						gpuFrameResult = 1;
 						pacingWaits = pacingWaits + retainedResult;
 					} else {
+						System.Console.Write("Display: retained frame failed: ");
+						System.Console.WriteLine(retainedResult);
 						// Stop using the shadow until it is rebuilt.
 						retainedShadowActive = false;
 
@@ -2903,11 +2925,18 @@ public class Program {
                         int dropped = Read16(frameStats, 8) +
                             Read16(frameStats, 10) * 65536;
 
-                        if (submitted != presented || dropped != 0) {
-                            System.Console.WriteLine("Display: frame count failure");
-                            failure = 14;
-                            break;
-                        }
+						if (submitted != presented || dropped != 0) {
+							System.Console.Write("Display: submitted=");
+							System.Console.WriteLine(submitted);
+							System.Console.Write("Display: presented=");
+							System.Console.WriteLine(presented);
+							System.Console.Write("Display: dropped=");
+							System.Console.WriteLine(dropped);
+
+							System.Console.WriteLine("Display: frame count failure");
+							failure = 14;
+							break;
+						}
 
                         if (presented >= 2) {
                             int lastMicros = Read16(frameStats, 12) +
@@ -2951,13 +2980,18 @@ public class Program {
                             if (width == 1024 && height == 768) {
                                 nextWidth = 1280; nextHeight = 800;
                             }
-                            if (System.Australis.Display.SetMode(nextWidth,
-                                nextHeight) != 0) {
-                                System.Console.WriteLine(
-                                    "Display: mode switch failure");
-                                failure = 15;
-                            }
-                            break;
+							int modeResult = System.Australis.Display.SetMode(nextWidth, nextHeight);
+
+							if (modeResult != 0) {
+								System.Console.WriteLine("Display: mode switch failure");
+								failure = 15;
+							} else {
+								// SetMode invalidates the kernel's retained renderer.
+								// Stop using the old retained windows immediately.
+								retainedShadowActive = false;
+								retainedStagingReady = false;
+							}
+							break;
                         }
 						bool gpuScanoutSupported = initialMode == 0;
                         keyEvent[0] = 5; keyEvent[1] = (byte)focused;
@@ -3006,9 +3040,7 @@ public class Program {
         return r <= 8 && g <= 8 && b <= 8;
     }
 
-    private static int ProbeGpuFrameRects(
-        int handle, byte[] layout,
-        int width, int height) {
+    private static int ProbeGpuFrameRects(int handle, byte[] layout, int width, int height) {
 
         int x = Read16(layout, 0) + 8;
         int y = ContentTop(layout);
@@ -3085,10 +3117,7 @@ public class Program {
         return 0;
     }
 
-    private static int ProbeGpuDesktopComposition(
-        int firstGpu, int secondGpu,
-        byte[] firstLayout, byte[] secondLayout,
-        int width, int height) {
+    private static int ProbeGpuDesktopComposition(int firstGpu, int secondGpu, byte[] firstLayout, byte[] secondLayout, int width, int height) {
 
         // Actual window-content positions on the desktop.
         int ax = Read16(firstLayout, 0) + 8;
@@ -3254,11 +3283,7 @@ public class Program {
         return 0;
     }
 
-    private static int TryGpuLiveFrame(
-        int width, int height,
-        byte[] firstState, byte[] firstLayout, int firstGpu,
-        byte[] secondState, byte[] secondLayout, int secondGpu,
-        int focused, int top) {
+    private static int TryGpuLiveFrame(int width, int height, byte[] firstState, byte[] firstLayout, int firstGpu, byte[] secondState, byte[] secondLayout, int secondGpu, int focused, int top) {
 
         // First milestone: two normal, GPU-backed windows.
         // Unsupported states use the software renderer.
@@ -3342,10 +3367,7 @@ public class Program {
         return 1;
     }
 
-    private static int ProbeGpuRoundedDecorations(
-        int firstGpu, int secondGpu,
-        byte[] firstLayout, byte[] secondLayout,
-        int width, int height) {
+    private static int ProbeGpuRoundedDecorations(int firstGpu, int secondGpu, byte[] firstLayout, byte[] secondLayout, int width, int height) {
 
         System.Console.WriteLine("GPUDBG: rounded STEP 1 - entered");
 
@@ -3461,8 +3483,7 @@ public class Program {
 
         System.Console.WriteLine("GPUDBG: frame 2 starting");
 
-        System.Console.WriteLine(
-            "GPUDBG: pausing before frame 2");
+        System.Console.WriteLine("GPUDBG: pausing before frame 2");
 
         int pauseResult = System.Australis.Process.Sleep(1);
 
@@ -3484,8 +3505,7 @@ public class Program {
         }
 
         System.Console.WriteLine("GPUDBG: frame 2 drawing B");
-        int drawB2 = GpuDrawRoundedWindow(
-            secondLayout, secondGpu, false);
+        int drawB2 = GpuDrawRoundedWindow(secondLayout, secondGpu, false);
 
         System.Console.Write("GPUDBG: frame 2 DrawB = ");
         System.Console.WriteLine(drawB2);
@@ -3512,8 +3532,7 @@ public class Program {
             return -544;
         }
 
-        System.Console.WriteLine(
-            "GPUDBG: rounded frame 2 rendered");
+        System.Console.WriteLine("GPUDBG: rounded frame 2 rendered");
 
 
         System.Console.WriteLine("GPUDBG: STEP 14");
@@ -3547,14 +3566,12 @@ public class Program {
             return -82;
         }
 
-        System.Console.WriteLine(
-            "Display: live GPU presentation round-trip passed");
+        System.Console.WriteLine("Display: live GPU presentation round-trip passed");
 
         return 0;
     }
 
-    private static bool CheckRoundedPixel(
-        string name, int x, int y, int expected) {
+    private static bool CheckRoundedPixel(string name, int x, int y, int expected) {
 
         int actual =
             System.Australis.Gpu.FramePixel(x, y);
@@ -3580,8 +3597,7 @@ public class Program {
         return false;
     }
 
-    private static bool CheckGpuProbePixel(
-        string label, int x, int y, int expected) {
+    private static bool CheckGpuProbePixel(string label, int x, int y, int expected) {
 
         int actual =
             System.Australis.Gpu.FramePixel(x, y);
@@ -3607,9 +3623,7 @@ public class Program {
         return false;
     }
 
-    private static int ProbeLiveGpuVisual(
-        int firstGpu, int secondGpu,
-        byte[] firstLayout, byte[] secondLayout) {
+    private static int ProbeLiveGpuVisual(int firstGpu, int secondGpu, byte[] firstLayout, byte[] secondLayout) {
 
         if (firstGpu < 1 || secondGpu < 1) {
             return -95;
