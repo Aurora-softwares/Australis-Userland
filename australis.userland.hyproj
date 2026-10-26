@@ -3,7 +3,28 @@ name = "Australis.Userland"
 version = "0.0.1"
 type = "exec"
 output = "system/Core/System.exec"
-sources = ["./program.hy"]
+sources = [
+	"program.hy",
+	"commands/Cat/Cat.hyproj",
+	"commands/Ls/Ls.hyproj",
+	"commands/Ps/Ps.hyproj",
+	"commands/Drivers/Drivers.hyproj",
+	"commands/Mem/Mem.hyproj",
+	"commands/Echo/Echo.hyproj",
+	"commands/Tree/Tree.hyproj",
+	"commands/Mkdir/Mkdir.hyproj",
+	"commands/Touch/Touch.hyproj",
+	"commands/Cp/Cp.hyproj",
+	"commands/Mv/Mv.hyproj",
+	"commands/Rm/Rm.hyproj",
+	"commands/Edit/Edit.hyproj",
+	"commands/Hexedit/Hexedit.hyproj",
+	"services/Device/Device.hyproj",
+	"services/Storage/Storage.hyproj",
+	"services/Display/Display.hyproj",
+	"services/DisplayDemoA/DisplayDemoA.hyproj",
+	"services/DisplayDemoB/DisplayDemoB.hyproj"
+]
 project_references = []
 
 [package]

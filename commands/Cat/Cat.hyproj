@@ -3,8 +3,11 @@ name = "Australis Cat"
 version = "0.1.0"
 type = "exec"
 output = "cat.exec"
-sources = ["Program.hy"]
-project_references = []
+sources = [
+	"Program.hy"
+]
+project_references = [
+]
 
 [package]
 id = "os.australis.cat"

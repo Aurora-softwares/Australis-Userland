@@ -1566,11 +1566,14 @@ public class Program {
 			i = i + 1;
 		}
 
-		int cursorResult = Cursor(cursorX, cursorY);
-		if (cursorResult != 0) {
-			System.Console.Write("Display: retained cursor failed: ");
-			System.Console.WriteLine(cursorResult);
-			return -5;
+		if (cursorDamaged) {
+			int cursorResult = Cursor(cursorX, cursorY);
+
+			if (cursorResult != 0) {
+				System.Console.Write("Display: retained cursor failed: ");
+				System.Console.WriteLine(cursorResult);
+				return -5;
+			}
 		}
 
 		int presentResult = System.Australis.Display.PresentFrame();
@@ -2786,9 +2789,7 @@ public class Program {
 				// These operations do not have matching retained APIs yet.
 				bool unsupported =
 					!Visible(firstState, firstLayout) ||
-					!Visible(secondState, secondLayout) ||
-					firstLayout[9] == 1 ||
-					secondLayout[9] == 1;
+					!Visible(secondState, secondLayout);
 
 				if (unsupported) {
 					retainedShadowActive = false;
@@ -2895,51 +2896,52 @@ public class Program {
 
                     pacingWaits = pacingWaits + waitCount;
 
-                    // Existing software frame statistics.
-                    if (metricsReported == 0) {
-                        if (System.Australis.Display.Stats(frameStats) != 20) {
-                            System.Console.WriteLine("Display: frame stats failure");
-                            failure = 14;
-                            break;
-                        }
+                }
 
-                        int submitted = Read16(frameStats, 0) +
-                            Read16(frameStats, 2) * 65536;
-                        int presented = Read16(frameStats, 4) +
-                            Read16(frameStats, 6) * 65536;
-                        int dropped = Read16(frameStats, 8) +
-                            Read16(frameStats, 10) * 65536;
+                // Existing software frame statistics.
+                if (metricsReported == 0) {
+                    if (System.Australis.Display.Stats(frameStats) != 20) {
+                        System.Console.WriteLine("Display: frame stats failure");
+                        failure = 14;
+                        break;
+                    }
 
-						if (submitted != presented || dropped != 0) {
-							System.Console.Write("Display: submitted=");
-							System.Console.WriteLine(submitted);
-							System.Console.Write("Display: presented=");
-							System.Console.WriteLine(presented);
-							System.Console.Write("Display: dropped=");
-							System.Console.WriteLine(dropped);
+                    int submitted = Read16(frameStats, 0) +
+                        Read16(frameStats, 2) * 65536;
+                    int presented = Read16(frameStats, 4) +
+                        Read16(frameStats, 6) * 65536;
+                    int dropped = Read16(frameStats, 8) +
+                        Read16(frameStats, 10) * 65536;
 
-							System.Console.WriteLine("Display: frame count failure");
-							failure = 14;
-							break;
-						}
+                    if (submitted != presented || dropped != 0) {
+                        System.Console.Write("Display: submitted=");
+                        System.Console.WriteLine(submitted);
+                        System.Console.Write("Display: presented=");
+                        System.Console.WriteLine(presented);
+                        System.Console.Write("Display: dropped=");
+                        System.Console.WriteLine(dropped);
 
-                        if (presented >= 2) {
-                            int lastMicros = Read16(frameStats, 12) +
-                                Read16(frameStats, 14) * 65536;
-                            int maxMicros = Read16(frameStats, 16) +
-                                Read16(frameStats, 18) * 65536;
+                        System.Console.WriteLine("Display: frame count failure");
+                        failure = 14;
+                        break;
+                    }
 
-                            System.Console.Write("Display: paced frames=");
-                            System.Console.Write(presented);
-                            System.Console.Write(" last_us=");
-                            System.Console.Write(lastMicros);
-                            System.Console.Write(" max_us=");
-                            System.Console.Write(maxMicros);
-                            System.Console.Write(" waits=");
-                            System.Console.WriteLine(pacingWaits);
+                    if (presented >= 2) {
+                        int lastMicros = Read16(frameStats, 12) +
+                            Read16(frameStats, 14) * 65536;
+                        int maxMicros = Read16(frameStats, 16) +
+                            Read16(frameStats, 18) * 65536;
 
-                            metricsReported = 1;
-                        }
+                        System.Console.Write("Display: paced frames=");
+                        System.Console.Write(presented);
+                        System.Console.Write(" last_us=");
+                        System.Console.Write(lastMicros);
+                        System.Console.Write(" max_us=");
+                        System.Console.Write(maxMicros);
+                        System.Console.Write(" waits=");
+                        System.Console.WriteLine(pacingWaits);
+
+                        metricsReported = 1;
                     }
                 }
             }
