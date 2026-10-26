@@ -1482,23 +1482,12 @@ public class Program {
             int rectWidth = dirty[offset + 4] + dirty[offset + 5] * 256;
 			int rectHeight = dirty[offset + 6] + dirty[offset + 7] * 256;
 
-			System.Console.Write("PERF: dirty x=");
-			System.Console.Write(x);
-			System.Console.Write(" y=");
-			System.Console.Write(y);
-			System.Console.Write(" w=");
-			System.Console.Write(rectWidth);
-			System.Console.Write(" h=");
-			System.Console.WriteLine(rectHeight);
-
 			SetClip(clip, x, y, rectWidth, rectHeight);
-			System.Console.WriteLine("PERF: compose START");
             if (Compose(width, height, firstState, firstCells,
                 firstLayout, secondState, secondCells, secondLayout,
                 clip, focused, top, firstGpu, secondGpu) != 0) {
                 return -5;
             }
-			System.Console.WriteLine("PERF: compose END");
             if (!hardwareCursor && x < cursorX + 14 &&
                 x + rectWidth > cursorX &&
                 y < cursorY + 20 && y + rectHeight > cursorY &&
@@ -1653,9 +1642,14 @@ public class Program {
 		if (windowId < 1) {
 			return -22;
 		}
+		int geometry = SyncRetainedGeometry(windowId, before, current);
+		if (geometry != 0) { return geometry; }
+		bool resized =
+			Read16(before, 4) != Read16(current, 4) ||
+			Read16(before, 6) != Read16(current, 6);
 
-		// Refresh the cached content only when it changes.
-		if (contentChanged) {
+		// A resize changes cell spacing even when the content is unchanged.
+		if (contentChanged || resized) {
             int submitted = -19;
             if (gpuHandle > 0) {
                 submitted = System.Australis.Display.RetainedSubmitGpu(
@@ -1669,11 +1663,6 @@ public class Program {
                 return submitted;
             }
         }
-
-		// Moving a window must not require resubmitting pixels.
-		if (Read16(before, 0) != Read16(current, 0) || Read16(before, 2) != Read16(current, 2)) {
-			return System.Australis.Display.RetainedMove(windowId, Read16(current, 0), Read16(current, 2));
-		}
 
 		return 0;
 	}
@@ -2799,11 +2788,7 @@ public class Program {
 					!Visible(firstState, firstLayout) ||
 					!Visible(secondState, secondLayout) ||
 					firstLayout[9] == 1 ||
-					secondLayout[9] == 1 ||
-					Read16(beforeFirst, 4) != Read16(firstLayout, 4) ||
-					Read16(beforeFirst, 6) != Read16(firstLayout, 6) ||
-					Read16(beforeSecond, 4) != Read16(secondLayout, 4) ||
-					Read16(beforeSecond, 6) != Read16(secondLayout, 6);
+					secondLayout[9] == 1;
 
 				if (unsupported) {
 					retainedShadowActive = false;
