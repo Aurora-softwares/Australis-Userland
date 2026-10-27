@@ -115,8 +115,13 @@ public class Program {
             System.Console.WriteLine("System: display unavailable");
             return 0;
         }
-        int ready = System.Australis.Process.WaitReady(pid, 10000);
+        // The first composed frame can take many scheduler quanta on a
+        // framebuffer backend. Keep supervision bounded, but give it the
+        // maximum supported instruction-round budget before terminating it.
+        int ready = System.Australis.Process.WaitReady(pid, 100000);
         if (ready != 0) {
+            System.Console.Write("System: display readiness failed: ");
+            System.Console.WriteLine(ready);
             int terminated = System.Australis.Process.Terminate(pid);
             int reaped = System.Australis.Process.Wait(pid);
             System.Console.WriteLine("System: display unavailable");
