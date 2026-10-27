@@ -1640,11 +1640,30 @@ public class Program {
 			Read16(ids, offset + 2) * 65536;
 	}
 
-	private static int SyncRetainedWindow(byte[] ids, int idOffset, byte[] before, byte[] current, byte[] cells, int gpuHandle, bool contentChanged) {
+	private static int SyncRetainedWindow(byte[] ids, int idOffset,
+		byte[] state, byte[] before, byte[] current, byte[] cells,
+		int gpuHandle, bool contentChanged) {
 		int windowId = RetainedWindowId(ids, idOffset);
+		if (state[1] != 1) {
+			if (windowId < 1) { return 0; }
+			int closed = System.Australis.Display.RetainedClose(windowId);
+			if (closed == 0) {
+				Write16(ids, idOffset, 0);
+				Write16(ids, idOffset + 2, 0);
+			}
+			return closed;
+		}
 		if (windowId < 1) {
 			return -22;
 		}
+		if (before[8] != current[8]) {
+			if (current[8] == 0) {
+				return System.Australis.Display.RetainedMinimize(windowId);
+			}
+			int restored = System.Australis.Display.RetainedRestore(windowId);
+			if (restored != 0) { return restored; }
+		}
+		if (current[8] == 0) { return 0; }
 		int geometry = SyncRetainedGeometry(windowId, before, current);
 		if (geometry != 0) { return geometry; }
 		bool resized =
@@ -2785,19 +2804,13 @@ public class Program {
             }
 
 			if (retainedShadowActive) {
-
-				// These operations do not have matching retained APIs yet.
-				bool unsupported =
-					!Visible(firstState, firstLayout) ||
-					!Visible(secondState, secondLayout);
-
-				if (unsupported) {
-					retainedShadowActive = false;
-					System.Console.WriteLine("Display: retained shadow suspended");
-				} else {
-					int status = SyncRetainedWindow(retainedWindowIds, 0, beforeFirst, firstLayout, firstCells, firstGpu, changed == 1 || changed == 2);
+					int status = SyncRetainedWindow(retainedWindowIds, 0,
+						firstState, beforeFirst, firstLayout, firstCells, firstGpu,
+						changed == 1 || changed == 2);
 					if (status == 0) {
-						status = SyncRetainedWindow(retainedWindowIds, 4, beforeSecond, secondLayout, secondCells, secondGpu, other == 1 || other == 2);
+						status = SyncRetainedWindow(retainedWindowIds, 4,
+							secondState, beforeSecond, secondLayout, secondCells,
+							secondGpu, other == 1 || other == 2);
 					}
 
 					// Keep retained stacking order aligned with the desktop.
@@ -2827,7 +2840,6 @@ public class Program {
 						System.Console.Write("Display: retained sync stopped: ");
 						System.Console.WriteLine(status);
 					}
-				}
 			}
 
             if (dirty[0] > 0) {
