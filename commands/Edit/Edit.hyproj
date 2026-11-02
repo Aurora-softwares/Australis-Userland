@@ -7,7 +7,7 @@ sources = ["Program.hy", "../EditorStorage.hy"]
 project_references = []
 
 [package]
-id = "os.australis.edit"
+id = "australis..commands.edit"
 description = "Terminal text editor with cursor navigation and checked saves"
 authors = ["Aurora Softwares"]
 license = "MIT"

@@ -7,7 +7,7 @@ sources = ["Program.hy"]
 project_references = []
 
 [package]
-id = "os.australis.rm"
+id = "australis..commands.rm"
 description = "Remove a file or empty directory"
 authors = ["Aurora Softwares"]
 license = "MIT"

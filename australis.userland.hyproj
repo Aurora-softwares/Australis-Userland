@@ -1,5 +1,5 @@
 format = 2
-name = "Australis.Userland"
+name = "Userland executable"
 version = "0.0.1"
 type = "exec"
 output = "system/Core/System.exec"

@@ -7,7 +7,7 @@ sources = ["Program.hy", "../EditorStorage.hy"]
 project_references = []
 
 [package]
-id = "os.australis.hexedit"
+id = "australis..commands.hexedit"
 description = "Terminal hex editor with byte navigation and checked saves"
 authors = ["Aurora Softwares"]
 license = "MIT"

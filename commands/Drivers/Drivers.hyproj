@@ -7,7 +7,7 @@ sources = ["Program.hy"]
 project_references = []
 
 [package]
-id = "os.australis.drivers"
+id = "australis..commands.drivers"
 description = "Show active kernel drivers through checked system information"
 authors = ["Aurora Softwares"]
 license = "MIT"

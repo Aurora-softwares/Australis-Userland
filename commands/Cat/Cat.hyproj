@@ -1,5 +1,5 @@
 format = 2
-name = "Australis Cat"
+name = "Cat Command"
 version = "0.1.0"
 type = "exec"
 output = "cat.exec"
@@ -10,7 +10,7 @@ project_references = [
 ]
 
 [package]
-id = "os.australis.cat"
+id = "australis.commands.cat"
 description = "Print a file through the checked Australis file API"
 authors = ["Aurora Softwares"]
 license = "MIT"

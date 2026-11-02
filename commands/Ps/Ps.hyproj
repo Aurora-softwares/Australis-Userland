@@ -1,5 +1,5 @@
 format = 2
-name = "Australis Ps"
+name = "Ps Command"
 version = "0.1.0"
 type = "exec"
 output = "ps.exec"
@@ -7,7 +7,7 @@ sources = ["Program.hy"]
 project_references = []
 
 [package]
-id = "os.australis.ps"
+id = "australis..commands.ps"
 description = "Show the foreground process and previous launch result"
 authors = ["Aurora Softwares"]
 license = "MIT"

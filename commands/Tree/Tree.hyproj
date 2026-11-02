@@ -1,5 +1,5 @@
 format = 2
-name = "Australis Tree"
+name = "Tree Command"
 version = "0.1.0"
 type = "exec"
 output = "tree.exec"
@@ -7,7 +7,7 @@ sources = ["Program.hy"]
 project_references = []
 
 [package]
-id = "os.australis.tree"
+id = "australis..commands.tree"
 description = "Display a bounded recursive directory tree"
 authors = ["Aurora Softwares"]
 license = "MIT"
