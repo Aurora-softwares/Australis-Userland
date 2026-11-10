@@ -2929,7 +2929,39 @@ public class Program {
 			if (firstLayout[9] == 1 || secondLayout[9] == 1) {
 				retainedShadowActive = false;
 			}
-			if (retainedShadowActive) {
+			bool resumedRetained = false;
+			if (!gpuLiveEnabled && !retainedShadowActive &&
+				firstLayout[9] == 0 && secondLayout[9] == 0 &&
+				(beforeFirst[9] == 1 || beforeSecond[9] == 1)) {
+				// The retained renderer stayed at the original geometry while
+				// maximize used the software path. Refresh its content and resume
+				// it once both windows return to normal geometry.
+				int firstId = RetainedWindowId(retainedWindowIds, 0);
+				int secondId = RetainedWindowId(retainedWindowIds, 4);
+				int resume = System.Australis.Display.RetainedSubmitCells(
+					firstId, firstCells);
+				if (resume == 0) {
+					resume = System.Australis.Display.RetainedSubmitCells(
+						secondId, secondCells);
+				}
+				if (resume == 0) {
+					int topId = firstId;
+					if (top == 2) { topId = secondId; }
+					resume = System.Australis.Display.RetainedFocus(topId);
+				}
+				if (resume == 0) {
+					resume = System.Australis.Display.RetainedHover(
+						cursorX, cursorY);
+				}
+				if (resume == 0) {
+					retainedShadowActive = true;
+					resumedRetained = true;
+				} else {
+					System.Console.Write("Display: retained resume failed: ");
+					System.Console.WriteLine(resume);
+				}
+			}
+			if (retainedShadowActive && !resumedRetained) {
 					int status = SyncRetainedWindow(retainedWindowIds, 0,
 						firstState, beforeFirst, firstLayout, firstCells, firstGpu,
 						changed == 1 || changed == 2);
