@@ -73,7 +73,8 @@ public class Program {
         }
 
         // Real process-owned window content.
-        if (System.Australis.Gpu.DrawWindow( gpuHandle, x, ContentTop(layout)) != 0) {
+        if (System.Australis.Gpu.DrawWindow(
+            gpuHandle, x + 8, ContentTop(layout)) != 0) {
             return -5;
         }
 
@@ -480,14 +481,14 @@ public class Program {
 	}
 
 	private static int ContentWidth(byte[] layout) {
-		return Read16(layout, 4);
+		return Read16(layout, 4) - 16;
 	}
 
 	private static int ContentHeight(byte[] layout) {
 		int y = Read16(layout, 2);
 		int height = Read16(layout, 6);
 
-		return y + height - ContentTop(layout);
+		return y + height - 8 - ContentTop(layout);
 	}
 
 	private static int UpdateTextureCell(int handle, byte[] layout, byte[] cells, int column, int row) {
@@ -495,10 +496,17 @@ public class Program {
             row < 0 || row >= 4) { return -22; }
         int width = ContentWidth(layout);
         int height = ContentHeight(layout);
-        int left = column * width / 4;
-        int right = (column + 1) * width / 4;
-        int top = row * height / 4;
-        int bottom = (row + 1) * height / 4;
+		int windowWidth = Read16(layout, 4);
+		int windowHeight = Read16(layout, 2) +
+			Read16(layout, 6) - ContentTop(layout);
+		int left = column * windowWidth / 4 - 8;
+		int right = (column + 1) * windowWidth / 4 - 8;
+		int top = row * windowHeight / 4;
+		int bottom = (row + 1) * windowHeight / 4;
+		if (left < 0) { left = 0; }
+		if (right > width) { right = width; }
+		if (bottom > height) { bottom = height; }
+		if (right <= left || bottom <= top) { return 0; }
         int cell = (row * 4 + column) * 3;
         int rgb = cells[cell] * 65536 + cells[cell + 1] * 256 +
             cells[cell + 2];
@@ -824,7 +832,8 @@ public class Program {
         }
 
         // Existing process-owned GPU window texture.
-        if (System.Australis.Gpu.DrawWindow(handle, x, ContentTop(layout)) != 0) {
+        if (System.Australis.Gpu.DrawWindow(
+            handle, x + 8, ContentTop(layout)) != 0) {
             System.Console.WriteLine("GPUDBG: rounded window texture failed");
             return -5;
         }
@@ -835,6 +844,50 @@ public class Program {
             return -5;
         }
 
+        return 0;
+    }
+
+    private static int GpuDrawLiveWindow(byte[] layout, int handle,
+        byte[] cells, bool focused) {
+        if (layout[9] != 1) {
+            return GpuDrawRoundedWindow(layout, handle, focused);
+        }
+        int x = Read16(layout, 0);
+        int y = Read16(layout, 2);
+        int width = Read16(layout, 4);
+        int height = Read16(layout, 6);
+        if (System.Australis.Gpu.FillFrameRect(
+            x, y, width, height, WindowBackground()) != 0) {
+            return -5;
+        }
+        // A maximized texture approaches a full display allocation. Draw
+        // the same 4x4 application cells directly into the GPU target so
+        // maximize does not repeatedly allocate full-screen CPU shadows.
+        int row = 0;
+        while (row < 4) {
+            int column = 0;
+            while (column < 4) {
+                int left = column * width / 4 - 8;
+                int right = (column + 1) * width / 4 - 8;
+                int top = row * height / 4;
+                int bottom = (row + 1) * height / 4;
+                if (left < 0) { left = 0; }
+                if (right > width - 16) { right = width - 16; }
+                if (bottom > height - 8) { bottom = height - 8; }
+                if (right > left && bottom > top) {
+                    int cell = (row * 4 + column) * 3;
+                    int rgb = cells[cell] * 65536 +
+                        cells[cell + 1] * 256 + cells[cell + 2];
+                    if (System.Australis.Gpu.FillFrameRect(
+                        x + 8 + left, y + top,
+                        right - left, bottom - top, rgb) != 0) {
+                        return -5;
+                    }
+                }
+                column = column + 1;
+            }
+            row = row + 1;
+        }
         return 0;
     }
 
@@ -1066,6 +1119,39 @@ public class Program {
         }
         if (Paint(x + 3, y + 14, 3, 6, 0x101820) != 0 ||
             Paint(x + 4, y + 14, 1, 5, 0xFFFFFF) != 0) { return -5; }
+        return 0;
+    }
+
+    private static int GpuCursorRect(int x, int y, int width,
+        int height, int rgb, int screenWidth, int screenHeight) {
+        if (x < 0 || y < 0 || x >= screenWidth || y >= screenHeight) {
+            return 0;
+        }
+        if (x + width > screenWidth) { width = screenWidth - x; }
+        if (y + height > screenHeight) { height = screenHeight - y; }
+        if (width < 1 || height < 1) { return 0; }
+        return System.Australis.Gpu.FillFrameRect(
+            x, y, width, height, rgb);
+    }
+
+    private static int GpuCursor(int x, int y,
+        int screenWidth, int screenHeight) {
+        int row = 0;
+        while (row < 14) {
+            int span = row / 2 + 2;
+            if (GpuCursorRect(x, y + row, span, 1, 0xFFFFFF,
+                screenWidth, screenHeight) != 0) { return -5; }
+            if (span > 2 && GpuCursorRect(x + 1, y + row,
+                span - 2, 1, 0x101010,
+                screenWidth, screenHeight) != 0) {
+                return -5;
+            }
+            row = row + 1;
+        }
+        if (GpuCursorRect(x + 3, y + 14, 3, 6, 0xFFFFFF,
+                screenWidth, screenHeight) != 0 ||
+            GpuCursorRect(x + 4, y + 14, 1, 5, 0x101010,
+                screenWidth, screenHeight) != 0) { return -5; }
         return 0;
     }
 
@@ -2280,7 +2366,22 @@ public class Program {
 		int resizeStartHeight = 0;
         int failure = 0;
         int metricsReported = 0;
-        bool gpuLiveEnabled = gpuScanoutSupported;
+        // The live VirGL path keeps a display-sized render target alongside
+        // the 2D scanout, client textures, and software fallback buffers.
+        // Leave a full 256 MiB of free physical pages for mode changes and
+        // other services; smaller guests use the retained CPU compositor.
+        bool gpuLiveEnabled = gpuScanoutSupported &&
+            System.Australis.SystemInfo.Query(35) >= 65536;
+        if (gpuScanoutSupported && !gpuLiveEnabled) {
+            System.Console.WriteLine(
+                "Display: GPU live deferred for available memory");
+        }
+        if (gpuLiveEnabled && firstGpu > 0 && secondGpu > 0) {
+            // The live GPU path owns presentation. Keeping a second retained
+            // CPU scene in step allocates full window shadows on every
+            // interactive resize and can exhaust the kernel heap.
+            retainedShadowActive = false;
+        }
         int gpuLiveFrames = 0;
         int pacingWaits = 1; // Startup checks that the early frame is deferred.
 
@@ -2320,6 +2421,10 @@ public class Program {
                         secondGpu = CreateWindowTexture(secondLayout,
                             secondCells);
                     }
+                    // Retained geometry was created for the old mode.
+                    // The software renderer remains the fallback until the
+                    // retained windows are explicitly rebuilt.
+                    retainedShadowActive = false;
                     captured = 0;
                     dragKind = 0; dragId = 0; buttons = 0;
                     cursorX = width / 2; cursorY = height / 2;
@@ -2340,13 +2445,15 @@ public class Program {
                 failure = 8; break;
             }
             if (changed == 1) {
-                if (firstState[1] == 1 && gpuHandle > 0) {
+                if (firstState[1] == 1 && gpuHandle > 0 &&
+                    firstLayout[9] != 1) {
                     if (firstGpu > 0) { System.Australis.Gpu.Destroy(firstGpu); }
                     firstGpu = CreateWindowTexture(firstLayout, firstCells);
                 }
                 Damage(dirty, 0, 0, width, height, width, height);
             } else if (changed == 2) {
-                if (firstGpu > 0 && UpdateTextureCell(firstGpu,
+                if (firstGpu > 0 && firstLayout[9] != 1 &&
+                    UpdateTextureCell(firstGpu,
                     firstLayout, firstCells, firstState[6],
                     firstState[7]) != 0) {
                     System.Australis.Gpu.Destroy(firstGpu);
@@ -2355,7 +2462,8 @@ public class Program {
                 DamageCell(dirty, firstState, firstLayout, width, height);
             }
             if (other == 1) {
-                if (secondState[1] == 1 && gpuHandle > 0) {
+                if (secondState[1] == 1 && gpuHandle > 0 &&
+                    secondLayout[9] != 1) {
                     if (secondGpu > 0) {
                         System.Australis.Gpu.Destroy(secondGpu);
                     }
@@ -2364,7 +2472,8 @@ public class Program {
                 }
                 Damage(dirty, 0, 0, width, height, width, height);
             } else if (other == 2) {
-                if (secondGpu > 0 && UpdateTextureCell(secondGpu,
+                if (secondGpu > 0 && secondLayout[9] != 1 &&
+                    UpdateTextureCell(secondGpu,
                     secondLayout, secondCells, secondState[6],
                     secondState[7]) != 0) {
                     System.Australis.Gpu.Destroy(secondGpu);
@@ -2471,6 +2580,11 @@ public class Program {
                                 }
                             } else if (control == 3) {
                                 ToggleMax(selected, width, height);
+								if (selected[9] == 1) {
+									System.Console.WriteLine("Display: window maximized");
+								} else {
+									System.Console.WriteLine("Display: window restored");
+								}
 							} else if (ResizeEdges(cursorX, cursorY, selected) != 0) {
 								dragKind = 2;
 								dragId = hit;
@@ -2731,13 +2845,15 @@ public class Program {
                 if (Read16(beforeFirst, 4) != Read16(firstLayout, 4) ||
                     Read16(beforeFirst, 6) != Read16(firstLayout, 6) ||
                     beforeFirst[9] != firstLayout[9]) {
-                    if (firstGpu > 0) {
-                        System.Australis.Gpu.Destroy(firstGpu);
-                    }
-                    firstGpu = -1;
-                    if (gpuHandle > 0) {
-                        firstGpu = CreateWindowTexture(firstLayout,
-                            firstCells);
+                    if (firstLayout[9] != 1) {
+                        if (firstGpu > 0) {
+                            System.Australis.Gpu.Destroy(firstGpu);
+                        }
+                        firstGpu = -1;
+                        if (gpuHandle > 0) {
+                            firstGpu = CreateWindowTexture(firstLayout,
+                                firstCells);
+                        }
                     }
                 }
                 DamageTransition(dirty, beforeFirst, firstLayout,
@@ -2750,13 +2866,15 @@ public class Program {
                 if (Read16(beforeSecond, 4) != Read16(secondLayout, 4) ||
                     Read16(beforeSecond, 6) != Read16(secondLayout, 6) ||
                     beforeSecond[9] != secondLayout[9]) {
-                    if (secondGpu > 0) {
-                        System.Australis.Gpu.Destroy(secondGpu);
-                    }
-                    secondGpu = -1;
-                    if (gpuHandle > 0) {
-                        secondGpu = CreateWindowTexture(secondLayout,
-                            secondCells);
+                    if (secondLayout[9] != 1) {
+                        if (secondGpu > 0) {
+                            System.Australis.Gpu.Destroy(secondGpu);
+                        }
+                        secondGpu = -1;
+                        if (gpuHandle > 0) {
+                            secondGpu = CreateWindowTexture(secondLayout,
+                                secondCells);
+                        }
                     }
                 }
                 DamageTransition(dirty, beforeSecond, secondLayout, width, height);
@@ -2765,6 +2883,8 @@ public class Program {
                 }
             }
 			if (beforeTop != top) {
+				System.Console.Write("Display: stack changed to ");
+				System.Console.WriteLine(top);
 				DamageOverlap(dirty, firstLayout, secondLayout, width, height);
 				Damage(dirty, 0, 0, width, 32, width, height);
 			}
@@ -2793,16 +2913,22 @@ public class Program {
 			}
             if (cursorX != originalX || cursorY != originalY ||
                 hardwareCursor != oldHardwareCursor) {
-                if (!oldHardwareCursor) {
+                if (!oldHardwareCursor || gpuLiveEnabled) {
                     Damage(dirty, originalX, originalY, 14, 20,
                         width, height);
                 }
-                if (!hardwareCursor) {
+                if (!hardwareCursor || gpuLiveEnabled) {
                     Damage(dirty, cursorX, cursorY, 14, 20,
                         width, height);
                 }
             }
 
+			// The retained maximize syscall is not yet safe in the live
+			// path. GPU and software composition both understand this
+			// geometry, so retire the retained shadow at this boundary.
+			if (firstLayout[9] == 1 || secondLayout[9] == 1) {
+				retainedShadowActive = false;
+			}
 			if (retainedShadowActive) {
 					int status = SyncRetainedWindow(retainedWindowIds, 0,
 						firstState, beforeFirst, firstLayout, firstCells, firstGpu,
@@ -2844,12 +2970,21 @@ public class Program {
 
             if (dirty[0] > 0) {
                 int gpuFrameResult = 0;
-				// Try retained rendering before the old GPU renderer.
-				if (retainedShadowActive) {
+				if (gpuLiveEnabled) {
+					gpuFrameResult = TryGpuLiveFrame(width, height,
+                        firstState, firstLayout, firstCells, firstGpu,
+                        secondState, secondLayout, secondCells, secondGpu,
+						focused, top, cursorX, cursorY);
+					if (gpuFrameResult < 0) {
+						gpuLiveEnabled = false;
+						System.Console.WriteLine("Display: GPU composition failed; software fallback");
+					}
+				}
+				if (gpuFrameResult == 0 && retainedShadowActive) {
 					int retainedResult = FlushRetained(dirty, width, height, cursorX, cursorY, hardwareCursor);
 					if (retainedResult >= 0) {
 						// Retained frame already presented.
-						gpuFrameResult = 1;
+						gpuFrameResult = 2;
 						pacingWaits = pacingWaits + retainedResult;
 					} else {
 						System.Console.Write("Display: retained frame failed: ");
@@ -2866,24 +3001,15 @@ public class Program {
 					}
 				}
 
-				// Only render the legacy GPU frame if retained did not
-				// successfully present the frame.
-				if (gpuFrameResult == 0 && gpuLiveEnabled) {
-					gpuFrameResult = TryGpuLiveFrame(width, height, firstState, firstLayout, firstGpu, secondState, secondLayout, secondGpu, focused, top);
-					if (gpuFrameResult < 0) {
-						gpuLiveEnabled = false;
-						System.Console.WriteLine("Display: GPU composition failed; software fallback");
-					}
-				}
-
-                if (gpuFrameResult == 1) {
-                    // GPU has presented the complete frame.
+                if (gpuFrameResult > 0) {
+                    // A retained CPU or GPU frame was already presented.
                     dirty[0] = 0;
-                    gpuLiveFrames = gpuLiveFrames + 1;
-
-                    if (gpuLiveFrames == 1) {
-                        System.Console.WriteLine(
-                            "Display: live GPU composition active");
+                    if (gpuFrameResult == 1) {
+                        gpuLiveFrames = gpuLiveFrames + 1;
+                        if (gpuLiveFrames == 1) {
+                            System.Console.WriteLine(
+                                "Display: live GPU composition active");
+                        }
                     }
                 } else {
                     // Restore 2D scanout before software fallback.
@@ -2979,6 +3105,14 @@ public class Program {
                             if (width == 1024 && height == 768) {
                                 nextWidth = 1280; nextHeight = 800;
                             }
+							// Reconfigure tears down the VirGL render target.
+							// Return scanout ownership to the 2D backend first.
+							if (gpuLiveEnabled &&
+								System.Australis.Gpu.RestoreFrame() != 0) {
+								System.Console.WriteLine("Display: GPU mode restoration failed");
+								failure = 15;
+								break;
+							}
 							int modeResult = System.Australis.Display.SetMode(nextWidth, nextHeight);
 
 							if (modeResult != 0) {
@@ -3282,12 +3416,9 @@ public class Program {
         return 0;
     }
 
-    private static int TryGpuLiveFrame(int width, int height, byte[] firstState, byte[] firstLayout, int firstGpu, byte[] secondState, byte[] secondLayout, int secondGpu, int focused, int top) {
+    private static int TryGpuLiveFrame(int width, int height, byte[] firstState, byte[] firstLayout, byte[] firstCells, int firstGpu, byte[] secondState, byte[] secondLayout, byte[] secondCells, int secondGpu, int focused, int top, int cursorX, int cursorY) {
 
-        // First milestone: two normal, GPU-backed windows.
-        // Unsupported states use the software renderer.
-        if (firstGpu < 1 || secondGpu < 1 ||
-            firstLayout[9] == 1 || secondLayout[9] == 1) {
+        if (firstGpu < 1 || secondGpu < 1) {
             return 0;
         }
 
@@ -3310,8 +3441,8 @@ public class Program {
         if (top == 1) {
             // Window A is above window B.
             if (Visible(secondState, secondLayout)) {
-                result = GpuDrawRoundedWindow(
-                    secondLayout, secondGpu, focused == 2);
+                result = GpuDrawLiveWindow(
+                    secondLayout, secondGpu, secondCells, focused == 2);
             }
 
             if (result != 0) { return -1; }
@@ -3321,14 +3452,14 @@ public class Program {
             }
 
             if (Visible(firstState, firstLayout)) {
-                result = GpuDrawRoundedWindow(
-                    firstLayout, firstGpu, focused == 1);
+                result = GpuDrawLiveWindow(
+                    firstLayout, firstGpu, firstCells, focused == 1);
             }
         } else {
             // Window B is above window A.
             if (Visible(firstState, firstLayout)) {
-                result = GpuDrawRoundedWindow(
-                    firstLayout, firstGpu, focused == 1);
+                result = GpuDrawLiveWindow(
+                    firstLayout, firstGpu, firstCells, focused == 1);
             }
 
             if (result != 0) { return -1; }
@@ -3338,18 +3469,47 @@ public class Program {
             }
 
             if (Visible(secondState, secondLayout)) {
-                result = GpuDrawRoundedWindow(
-                    secondLayout, secondGpu, focused == 2);
+                result = GpuDrawLiveWindow(
+                    secondLayout, secondGpu, secondCells, focused == 2);
             }
         }
 
         if (result != 0) { return -1; }
 
-        // Match the normal desktop topbar.
+        int maxId = 0;
+        if (top == 1 && Visible(firstState, firstLayout) &&
+            firstLayout[9] == 1) { maxId = 1; }
+        if (top == 2 && Visible(secondState, secondLayout) &&
+            secondLayout[9] == 1) { maxId = 2; }
+        int bar = 0x111820;
+        if (maxId > 0) { bar = 0x000000; }
         if (System.Australis.Gpu.FillFrameRect(
-            0, 0, width, TopbarHeight(), 0x111820) != 0) {
+            0, 0, width, TopbarHeight(), bar) != 0) {
             return -1;
         }
+
+        if (maxId == 1 && GpuDrawControls(0, 0, firstLayout) != 0) {
+            return -1;
+        }
+        if (maxId == 2 && GpuDrawControls(0, 0, secondLayout) != 0) {
+            return -1;
+        }
+        if (firstState[1] == 1) {
+            int color = 0xCB3830;
+            if (firstLayout[8] == 0) { color = 0x617080; }
+            if (System.Australis.Gpu.FillFrameRect(
+                width - 80, 8, 32, 16, color) != 0) { return -1; }
+        }
+        if (secondState[1] == 1) {
+            int color = 0x2A68D9;
+            if (secondLayout[8] == 0) { color = 0x617080; }
+            if (System.Australis.Gpu.FillFrameRect(
+                width - 44, 8, 32, 16, color) != 0) { return -1; }
+        }
+
+        // The selected VirtIO scanout has no independent cursor plane.
+        // Draw the same cursor geometry into the GPU frame.
+        if (GpuCursor(cursorX, cursorY, width, height) != 0) { return -1; }
 
         if (System.Australis.Process.Sleep(1) != 0) {
             return -1;
